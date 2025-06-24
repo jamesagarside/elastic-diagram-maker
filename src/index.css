@@ -1,0 +1,192 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Fix styling issues with toggle switches */
+.euiSwitch__button {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.euiSwitch__thumb {
+  border: none !important;
+}
+
+/* Fix focus ring issues */
+:focus {
+  outline: none !important;
+}
+
+.euiSwitch:focus {
+  outline: none !important;
+}
+
+.euiSwitch__input:focus + .euiSwitch__button {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.architecture-diagram {
+  background-color: #f5f7fa;
+  padding: 20px;
+  border-radius: 5px;
+  overflow-x: auto;
+  min-height: 500px;
+}
+
+.component-node {
+  border: 1px solid #d3dae6;
+  border-radius: 4px;
+  padding: 15px;
+  margin: 10px;
+  background-color: white;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.05);
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.component-node:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.component-icon {
+  width: 50px;
+  height: 50px;
+  margin: 0 auto 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.component-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.availability-zone {
+  border: 1px dashed #98a2b3;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+  background-color: rgba(200, 215, 235, 0.2);
+}
+
+.az-label {
+  font-size: 12px;
+  font-weight: bold;
+  color: #69707d;
+  margin-bottom: 10px;
+}
+
+.tier-container {
+  display: flex;
+  flex-direction: column;
+  margin: 10px 0;
+}
+
+.tier-label {
+  font-size: 14px;
+  font-weight: bold;
+  color: #343741;
+  margin-bottom: 5px;
+}
+
+.node-label {
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+.node-size {
+  font-size: 11px;
+  color: #69707d;
+  font-style: italic;
+}
+
+.node-index {
+  font-size: 10px;
+  color: #69707d;
+  text-align: center;
+  margin-top: -5px;
+  font-style: italic;
+}
+
+.download-btn {
+  margin-top: 20px;
+}
+
+.integrations-list {
+  margin-top: 10px;
+  text-align: left;
+}
+
+.integration-items {
+  margin: 5px 0;
+  padding-left: 5px;
+  list-style-type: none;
+}
+
+.integration-items li {
+  font-size: 11px;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+}
+
+/* Integration icon styling */
+.integration-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
+  object-fit: contain;
+}
+
+.integration-item .integration-icon img {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.euiComboBoxOption__content .integration-icon img {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+}
+
+/* Fix the issue with icon alignment in the list */
+.integration-items {
+  list-style-type: none;
+  padding-left: 0;
+  margin-top: 8px;
+}
+
+.integration-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 0.85em;
+}
+
+.integration-more {
+  font-style: italic;
+  margin-top: 4px;
+  font-size: 0.85em;
+}
+
+@media print {
+  .euiForm {
+    display: none;
+  }
+}

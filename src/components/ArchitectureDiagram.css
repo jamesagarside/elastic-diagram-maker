@@ -1,0 +1,66 @@
+/* Styling for integration items in the Architecture Diagram */
+.integrations-list {
+  padding: 8px;
+  background-color: #f7f8fc;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.integration-items {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.integration-item {
+  display: flex;
+  align-items: center;
+  width: calc(var(--integration-column-width, 33.333%) - 16px);
+  margin: 4px 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: width 0.3s ease, margin 0.3s ease;
+  min-width: 100px;
+}
+
+.integration-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+}
+
+.integration-icon img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.integration-more {
+  width: 100%;
+  text-align: center;
+  margin-top: 8px;
+  padding: 4px;
+  background-color: #ebedf5;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Fallback responsive styles (will be overridden by JavaScript) */
+@media (max-width: 768px) {
+  .integration-item {
+    width: calc(50% - 16px);
+  }
+}
+
+@media (max-width: 480px) {
+  .integration-item {
+    width: 100%;
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "elastic-diagram-maker",
+  "version": "1.0.0",
+  "description": "Web app to visualize Elastic Stack diagram",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "dependencies": {
+    "@elastic/datemath": "^5.0.3",
+    "@elastic/eui": "^78.0.0",
+    "@emotion/css": "^11.10.6",
+    "@emotion/react": "^11.10.6",
+    "html-to-image": "^1.11.11",
+    "prop-types": "^15.8.1",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-scripts": "5.0.1",
+    "react-beautiful-dnd": "^13.1.1",
+    "uuid": "^9.0.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

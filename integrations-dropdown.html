@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elastic Integrations Dropdown</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        h1 {
+            color: #1e3a8a;
+            margin-bottom: 20px;
+        }
+        .dropdown-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        .dropdown-button {
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            background-color: #fff;
+            border: 1px solid #d3dae6;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            font-size: 16px;
+            justify-content: space-between;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #fff;
+            width: 100%;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #d3dae6;
+            border-radius: 4px;
+            z-index: 1;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .dropdown-content.show {
+            display: block;
+        }
+        .search-box {
+            padding: 10px;
+            border-bottom: 1px solid #d3dae6;
+        }
+        .search-box input {
+            width: calc(100% - 20px);
+            padding: 8px;
+            border: 1px solid #d3dae6;
+            border-radius: 4px;
+        }
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            cursor: pointer;
+        }
+        .dropdown-item:hover {
+            background-color: #f5f7fa;
+        }
+        .integration-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
+            object-fit: contain;
+        }
+        .selected-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
+            object-fit: contain;
+        }
+        .dropdown-arrow {
+            margin-left: 10px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        .error {
+            color: #e7664c;
+            padding: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Elastic Integrations</h1>
+        
+        <div class="dropdown-container">
+            <button class="dropdown-button" id="integrationDropdown">
+                <div>
+                    <img class="selected-icon" id="selectedIcon" src="" alt="" style="display: none;">
+                    <span id="selectedIntegration">Select an integration</span>
+                </div>
+                <span class="dropdown-arrow">▼</span>
+            </button>
+            <div class="dropdown-content" id="integrationsList">
+                <div class="search-box">
+                    <input type="text" id="searchIntegration" placeholder="Search integrations..." />
+                </div>
+                <div id="integrationsContainer">
+                    <div class="loading">Loading integrations...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="selectedIntegrationDetails">
+            <p>Select an integration to see its details.</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM elements
+            const dropdown = document.getElementById('integrationDropdown');
+            const dropdownContent = document.getElementById('integrationsList');
+            const searchInput = document.getElementById('searchIntegration');
+            const integrationsContainer = document.getElementById('integrationsContainer');
+            const selectedIntegrationText = document.getElementById('selectedIntegration');
+            const selectedIcon = document.getElementById('selectedIcon');
+            const selectedIntegrationDetails = document.getElementById('selectedIntegrationDetails');
+            
+            // Toggle dropdown
+            dropdown.addEventListener('click', function() {
+                dropdownContent.classList.toggle('show');
+            });
+            
+            // Close dropdown when clicking outside
+            window.addEventListener('click', function(e) {
+                if (!dropdown.contains(e.target) && !dropdownContent.contains(e.target)) {
+                    dropdownContent.classList.remove('show');
+                }
+            });
+            
+            // Search functionality
+            searchInput.addEventListener('input', function() {
+                const searchValue = this.value.toLowerCase();
+                const items = document.querySelectorAll('.dropdown-item');
+                
+                items.forEach(item => {
+                    const text = item.textContent.toLowerCase();
+                    if (text.includes(searchValue)) {
+                        item.style.display = 'flex';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            });
+
+            // Load integrations directly from the Elastic Package Registry API
+            fetch('https://epr.elastic.co/search/package?experimental=true&prerelease=true')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch integrations data');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Format integration data directly from the API
+                    const integrations = formatIntegrations(data);
+                    displayIntegrations(integrations);
+                })
+                .catch(error => {
+                    console.error('Error loading integrations:', error);
+                    integrationsContainer.innerHTML = `<div class="error">Failed to load integrations: ${error.message}</div>`;
+                });
+
+            function formatIntegrations(packages) {
+                try {
+                    // Base URL for the Elastic Package Registry
+                    const EPR_BASE_URL = "https://epr.elastic.co";
+                    
+                    // Map the API data directly to our display format
+                    return packages.map(pkg => ({
+                        name: pkg.title || pkg.name,
+                        id: pkg.name,
+                        description: pkg.description || '',
+                        icon: pkg.icons && pkg.icons.length > 0 ? `${EPR_BASE_URL}${pkg.icons[0].path}` : '',
+                        version: pkg.version,
+                        categories: pkg.categories || []
+                    })).sort((a, b) => a.name.localeCompare(b.name));
+                } catch (error) {
+                    console.error('Error formatting integrations:', error);
+                    return [];
+                }
+            }
+
+            function displayIntegrations(integrations) {
+                if (!integrations || integrations.length === 0) {
+                    integrationsContainer.innerHTML = '<div class="error">No integrations found</div>';
+                    return;
+                }
+
+                // Clear loading message
+                integrationsContainer.innerHTML = '';
+                
+                // Create and append integration items
+                integrations.forEach(integration => {
+                    const item = document.createElement('div');
+                    item.className = 'dropdown-item';
+                    item.dataset.id = integration.id;
+                    item.dataset.name = integration.name;
+                    
+                    let iconHtml = '';
+                    if (integration.icon) {
+                        iconHtml = `<img class="integration-icon" src="${integration.icon}" alt="${integration.name} icon" onerror="this.src='https://www.elastic.co/static/favicons/favicon.ico';">`;
+                    }
+                    
+                    item.innerHTML = `
+                        ${iconHtml}
+                        <span>${integration.name}</span>
+                    `;
+                    
+                    item.addEventListener('click', function() {
+                        selectIntegration(integration);
+                        dropdownContent.classList.remove('show');
+                    });
+                    
+                    integrationsContainer.appendChild(item);
+                });
+            }
+
+            function selectIntegration(integration) {
+                selectedIntegrationText.textContent = integration.name;
+                
+                if (integration.icon) {
+                    selectedIcon.src = integration.icon;
+                    selectedIcon.alt = `${integration.name} icon`;
+                    selectedIcon.style.display = 'inline-block';
+                } else {
+                    selectedIcon.style.display = 'none';
+                }
+                
+                // Update details section
+                selectedIntegrationDetails.innerHTML = `
+                    <h3>${integration.name}</h3>
+                    <p>${integration.description || 'No description available.'}</p>
+                    <p><strong>Version:</strong> ${integration.version || 'N/A'}</p>
+                    <p><strong>Categories:</strong> ${integration.categories?.join(', ') || 'None'}</p>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
