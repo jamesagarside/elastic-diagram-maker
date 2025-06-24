@@ -11,9 +11,14 @@ import {
   EuiAccordion,
   EuiBadge,
   EuiLoadingSpinner,
+  EuiButtonIcon,
+  EuiToolTip,
+  EuiPopover,
+  EuiIcon,
 } from "@elastic/eui";
 import "./ArchitectureDiagram.css";
 
+// Import the SVG logos (we'll keep these as fallbacks)
 import {
   elasticsearchLogo,
   kibanaLogo,
@@ -23,6 +28,15 @@ import {
   enterpriseSearchLogo,
   elasticAgentLogo,
 } from "../assets/elastic-icons";
+
+// Import the new image icons
+import elasticsearchIcon from "../img/icons/elasticsaerch-icon.png";
+import kibanaIcon from "../img/icons/kibana-icon.png";
+import logstashIcon from "../img/icons/logstash-icon.png";
+import agentIcon from "../img/icons/agent-icon.png";
+import enterpriseSearchIcon from "../img/icons/enterprise-search-icon.png";
+import integrationsServerIcon from "../img/icons/integrations-server-icon.png";
+
 import { useIntegrations } from "../assets/data-integrations";
 import { DEFAULT_ICON_URL } from "../assets/integration-icon-urls";
 
@@ -78,12 +92,17 @@ const useDynamicColumnCount = (containerRef, itemMinWidth = 150) => {
   return columnCount;
 };
 
-const ComponentNode = ({ icon, label, size, tier }) => {
+const ComponentNode = ({ icon, label, size, tier, imageIcon }) => {
   return (
     <div className="component-node">
       <div className="component-icon">
-        {/* Use the HTML directly here to ensure proper rendering */}
-        <div dangerouslySetInnerHTML={{ __html: icon }} />
+        {imageIcon ? (
+          // Use the new PNG icons when available
+          <img src={imageIcon} alt={label} className="component-image-icon" />
+        ) : (
+          // Fall back to SVG icons if imageIcon is not provided
+          <div dangerouslySetInnerHTML={{ __html: icon }} />
+        )}
       </div>
       <div className="node-label">{label}</div>
       {tier && <div className="tier-label">{tier} Tier</div>}
@@ -101,7 +120,13 @@ const AvailabilityZone = ({ children, label }) => {
   );
 };
 
-const ArchitectureDiagram = ({ architecture }) => {
+const ArchitectureDiagram = ({
+  architecture,
+  exportToJson,
+  handleImportClick,
+  isExportPopoverOpen,
+  setIsExportPopoverOpen,
+}) => {
   // Fetch integrations dynamically using our custom hook
   const { integrations, loading: isLoadingIntegrations } = useIntegrations();
 
@@ -170,7 +195,8 @@ const ArchitectureDiagram = ({ architecture }) => {
     displayName,
     icon,
     azIndex,
-    tier = null
+    tier = null,
+    imageIcon = null
   ) => {
     const component = tier
       ? architecture.components.elasticsearch.tiers[componentName]
@@ -191,6 +217,7 @@ const ArchitectureDiagram = ({ architecture }) => {
           label={displayName}
           tier={tier}
           size={nodeSize}
+          imageIcon={imageIcon}
         />
         {nodeSizes.length > 1 && (
           <div className="node-index">
@@ -251,44 +278,64 @@ const ArchitectureDiagram = ({ architecture }) => {
                     "Elasticsearch",
                     elasticsearchLogo,
                     i,
-                    "Hot"
+                    "Hot",
+                    elasticsearchIcon
                   )}
                   {renderComponentInAZ(
                     "warm",
                     "Elasticsearch",
                     elasticsearchLogo,
                     i,
-                    "Warm"
+                    "Warm",
+                    elasticsearchIcon
                   )}
                   {renderComponentInAZ(
                     "cold",
                     "Elasticsearch",
                     elasticsearchLogo,
                     i,
-                    "Cold"
+                    "Cold",
+                    elasticsearchIcon
                   )}
                   {renderComponentInAZ(
                     "frozen",
                     "Elasticsearch",
                     elasticsearchLogo,
                     i,
-                    "Frozen"
+                    "Frozen",
+                    elasticsearchIcon
                   )}
                 </>
               )}
 
-              {/* ML Nodes */}
-              {renderComponentInAZ("mlNodes", "Machine Learning", mlLogo, i)}
+              {/* ML Nodes - using same icon as Elasticsearch */}
+              {renderComponentInAZ(
+                "mlNodes",
+                "Machine Learning",
+                mlLogo,
+                i,
+                null,
+                elasticsearchIcon
+              )}
 
               {/* Kibana */}
-              {renderComponentInAZ("kibana", "Kibana", kibanaLogo, i)}
+              {renderComponentInAZ(
+                "kibana",
+                "Kibana",
+                kibanaLogo,
+                i,
+                null,
+                kibanaIcon
+              )}
 
               {/* Enterprise Search */}
               {renderComponentInAZ(
                 "enterpriseSearch",
                 "Enterprise Search",
                 enterpriseSearchLogo,
-                i
+                i,
+                null,
+                enterpriseSearchIcon
               )}
 
               {/* Integrations Server */}
@@ -296,11 +343,12 @@ const ArchitectureDiagram = ({ architecture }) => {
                 "integrationsServer",
                 "Integrations Server",
                 beatsLogo,
-                i
+                i,
+                null,
+                integrationsServerIcon
               )}
 
-              {/* Logstash */}
-              {renderComponentInAZ("logstash", "Logstash", logstashLogo, i)}
+              {/* Logstash moved to Data Collection tier */}
             </EuiFlexGroup>
           </AvailabilityZone>
         </EuiFlexItem>
@@ -311,7 +359,11 @@ const ArchitectureDiagram = ({ architecture }) => {
   };
 
   const renderAgents = () => {
-    if (!architecture.components.elasticAgent.enabled) return null;
+    const showDataCollection =
+      architecture.components.elasticAgent.enabled ||
+      architecture.components.logstash.enabled;
+
+    if (!showDataCollection) return null;
 
     // Get the selected integrations
     const selectedIntegrations =
@@ -325,68 +377,101 @@ const ArchitectureDiagram = ({ architecture }) => {
         </EuiTitle>
         <EuiSpacer size="s" />
         <EuiFlexGroup>
-          <EuiFlexItem>
-            <div className="component-node">
-              <div className="component-icon">
-                <div dangerouslySetInnerHTML={{ __html: elasticAgentLogo }} />
-              </div>
-              <div className="node-label">Elastic Agent</div>
-              {selectedIntegrations.length > 0 && (
-                <div className="integrations-list" ref={integrationsListRef}>
-                  <EuiText size="xs" color="subdued">
-                    <p>
-                      <strong>
-                        Enabled Integrations ({selectedIntegrations.length}):
-                      </strong>
-                    </p>
-                    <ul className="integration-items">
-                      {isLoadingIntegrations ? (
-                        <li className="integration-item">
-                          <EuiLoadingSpinner size="m" /> Loading integrations...
-                        </li>
-                      ) : (
-                        <>
-                          {selectedIntegrations
-                            .slice(0, integrationsToShow)
-                            .map((integrationValue, index) => {
-                              // Find the integration in the list to get its label and icon
-                              const integrationObj = integrations.find(
-                                (i) => i.value === integrationValue
-                              );
-                              const integrationLabel =
-                                integrationObj?.label || integrationValue;
-
-                              return (
-                                <li key={index} className="integration-item">
-                                  <span
-                                    className="integration-icon"
-                                    dangerouslySetInnerHTML={{
-                                      __html: integrationObj?.icon
-                                        ? `<img src="${integrationObj.icon}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
-                                        : `<img src="${DEFAULT_ICON_URL}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" />`,
-                                    }}
-                                  ></span>
-                                  <span title={integrationLabel}>
-                                    {integrationLabel}
-                                  </span>
-                                </li>
-                              );
-                            })}
-                          {selectedIntegrations.length > integrationsToShow && (
-                            <li className="integration-more">
-                              +
-                              {selectedIntegrations.length - integrationsToShow}{" "}
-                              more
-                            </li>
-                          )}
-                        </>
-                      )}
-                    </ul>
-                  </EuiText>
+          {architecture.components.elasticAgent.enabled && (
+            <EuiFlexItem>
+              <div className="component-node">
+                <div className="component-icon">
+                  {/* Use the new agent icon image */}
+                  <img
+                    src={agentIcon}
+                    alt="Elastic Agent"
+                    className="component-image-icon"
+                  />
                 </div>
-              )}
-            </div>
-          </EuiFlexItem>
+                <div className="node-label">Elastic Agent</div>
+                {selectedIntegrations.length > 0 && (
+                  <div className="integrations-list" ref={integrationsListRef}>
+                    <EuiText size="xs" color="subdued">
+                      <p>
+                        <strong>
+                          Enabled Integrations ({selectedIntegrations.length}):
+                        </strong>
+                      </p>
+                      <ul className="integration-items">
+                        {isLoadingIntegrations ? (
+                          <li className="integration-item">
+                            <EuiLoadingSpinner size="m" /> Loading
+                            integrations...
+                          </li>
+                        ) : (
+                          <>
+                            {selectedIntegrations
+                              .slice(0, integrationsToShow)
+                              .map((integrationValue, index) => {
+                                // Find the integration in the list to get its label and icon
+                                const integrationObj = integrations.find(
+                                  (i) => i.value === integrationValue
+                                );
+                                const integrationLabel =
+                                  integrationObj?.label || integrationValue;
+
+                                return (
+                                  <li key={index} className="integration-item">
+                                    <span
+                                      className="integration-icon"
+                                      dangerouslySetInnerHTML={{
+                                        __html: integrationObj?.icon
+                                          ? `<img src="${integrationObj.icon}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
+                                          : `<img src="${DEFAULT_ICON_URL}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" />`,
+                                      }}
+                                    ></span>
+                                    <span title={integrationLabel}>
+                                      {integrationLabel}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            {selectedIntegrations.length >
+                              integrationsToShow && (
+                              <li className="integration-more">
+                                +
+                                {selectedIntegrations.length -
+                                  integrationsToShow}{" "}
+                                more
+                              </li>
+                            )}
+                          </>
+                        )}
+                      </ul>
+                    </EuiText>
+                  </div>
+                )}
+              </div>
+            </EuiFlexItem>
+          )}
+
+          {/* Logstash in Data Collection Tier */}
+          {architecture.components.logstash.enabled && (
+            <EuiFlexItem>
+              <div className="component-node">
+                <div className="component-icon">
+                  {/* Use the new logstash icon image */}
+                  <img
+                    src={logstashIcon}
+                    alt="Logstash"
+                    className="component-image-icon"
+                  />
+                </div>
+                <div className="node-label">Logstash</div>
+                {/* Display node size if configured */}
+                {architecture.components.logstash.nodeSize && (
+                  <div className="node-size">
+                    {architecture.components.logstash.nodeSize}GB
+                  </div>
+                )}
+              </div>
+            </EuiFlexItem>
+          )}
         </EuiFlexGroup>
       </>
     );
@@ -401,14 +486,53 @@ const ArchitectureDiagram = ({ architecture }) => {
           </EuiTitle>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
-          <EuiButton
-            size="s"
-            iconType="download"
-            onClick={downloadAsPNG}
-            className="download-btn"
+          <div
+            className="button-container"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
           >
-            Download as PNG
-          </EuiButton>
+            {/* Import button using EuiButton */}
+            <EuiButton
+              size="s"
+              iconType="importAction"
+              onClick={handleImportClick}
+            >
+              Import as JSON
+            </EuiButton>
+
+            {/* Export button and popover */}
+            <EuiPopover
+              button={
+                <EuiButton
+                  size="s"
+                  iconType="exportAction"
+                  onClick={() => setIsExportPopoverOpen(!isExportPopoverOpen)}
+                >
+                  Export as JSON
+                </EuiButton>
+              }
+              isOpen={isExportPopoverOpen}
+              closePopover={() => setIsExportPopoverOpen(false)}
+            >
+              <div style={{ padding: "12px" }}>
+                <EuiText size="s">
+                  <p>Export your current architecture configuration as JSON.</p>
+                </EuiText>
+                <EuiSpacer size="s" />
+                <EuiButton size="s" fill onClick={exportToJson}>
+                  Export as JSON
+                </EuiButton>
+              </div>
+            </EuiPopover>
+
+            {/* Download as PNG button */}
+            <EuiButton size="s" iconType="download" onClick={downloadAsPNG}>
+              Download as PNG
+            </EuiButton>
+          </div>
         </EuiFlexItem>
       </EuiFlexGroup>
       <EuiSpacer size="m" />

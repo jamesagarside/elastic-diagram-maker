@@ -52,6 +52,20 @@
   font-weight: 500;
 }
 
+/* Styling for component icons */
+.component-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.component-image-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
 /* Fallback responsive styles (will be overridden by JavaScript) */
 @media (max-width: 768px) {
   .integration-item {

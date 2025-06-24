@@ -12,6 +12,19 @@ code {
     monospace;
 }
 
+/* Header logo styling */
+.header-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-logo img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
 /* Fix styling issues with toggle switches */
 .euiSwitch__button {
   border: none !important;

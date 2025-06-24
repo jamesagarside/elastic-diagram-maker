@@ -459,6 +459,30 @@ const InputForm = ({ architecture, updateArchitecture }) => {
               </EuiFormRow>
             </EuiFlexItem>
             {renderTierConfig("frozen", "Frozen")}
+
+            {/* ML Nodes */}
+            <EuiFlexItem grow={false}>
+              <EuiFormRow hasChildLabel={false}>
+                <EuiSwitch
+                  label="Machine Learning Nodes"
+                  checked={architecture.components.mlNodes.enabled}
+                  onChange={() => handleComponentToggle("mlNodes")}
+                />
+              </EuiFormRow>
+            </EuiFlexItem>
+            {renderComponentConfig("mlNodes", "Machine Learning")}
+
+            {/* Enterprise Search */}
+            <EuiFlexItem grow={false}>
+              <EuiFormRow hasChildLabel={false}>
+                <EuiSwitch
+                  label="Enterprise Search"
+                  checked={architecture.components.enterpriseSearch.enabled}
+                  onChange={() => handleComponentToggle("enterpriseSearch")}
+                />
+              </EuiFormRow>
+            </EuiFlexItem>
+            {renderComponentConfig("enterpriseSearch", "Enterprise Search")}
           </EuiFlexGroup>
         )}
 
@@ -474,26 +498,6 @@ const InputForm = ({ architecture, updateArchitecture }) => {
           />
         </EuiFormRow>
         {renderComponentConfig("kibana", "Kibana")}
-
-        {/* ML Nodes */}
-        <EuiFormRow hasChildLabel={false}>
-          <EuiSwitch
-            label="Machine Learning Nodes"
-            checked={architecture.components.mlNodes.enabled}
-            onChange={() => handleComponentToggle("mlNodes")}
-          />
-        </EuiFormRow>
-        {renderComponentConfig("mlNodes", "Machine Learning")}
-
-        {/* Enterprise Search */}
-        <EuiFormRow hasChildLabel={false}>
-          <EuiSwitch
-            label="Enterprise Search"
-            checked={architecture.components.enterpriseSearch.enabled}
-            onChange={() => handleComponentToggle("enterpriseSearch")}
-          />
-        </EuiFormRow>
-        {renderComponentConfig("enterpriseSearch", "Enterprise Search")}
 
         {/* Integrations Server */}
         <EuiFormRow hasChildLabel={false}>
