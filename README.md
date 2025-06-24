@@ -60,6 +60,17 @@ npm run build
 
 This creates a production-ready build in the `build` folder.
 
+## Running in Production
+
+When running in production, OpenTelemetry is available for monitoring and observability.
+
+```bash
+# Start the production server with OpenTelemetry enabled
+OTEL_EXPORTER_OTLP_ENDPOINT=https://your-collector-endpoint:4318 node server.js
+```
+
+See [TELEMETRY.md](TELEMETRY.md) for more details on configuring OpenTelemetry.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
