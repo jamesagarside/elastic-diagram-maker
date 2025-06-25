@@ -509,6 +509,13 @@ const InputForm = ({ architecture, updateArchitecture }) => {
         </EuiFormRow>
         {renderComponentConfig("integrationsServer", "Integrations Server")}
 
+        {/* Data Collection Section */}
+        <EuiSpacer size="m" />
+        <EuiTitle size="xs">
+          <h3>Data Collection</h3>
+        </EuiTitle>
+        <EuiSpacer size="s" />
+
         {/* Logstash */}
         <EuiFormRow hasChildLabel={false}>
           <EuiSwitch
