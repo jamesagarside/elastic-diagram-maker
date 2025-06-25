@@ -1,3 +1,7 @@
+// Initialize OpenTelemetry in production
+const { initializeOpenTelemetry } = require("./telemetry");
+const telemetry = initializeOpenTelemetry();
+
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
@@ -28,6 +32,7 @@ const PUBLIC_DIR = path.join(__dirname, "build");
 const server = http.createServer((req, res) => {
   console.log(`Request: ${req.url}`);
 
+<<<<<<< remove-otel
   // Handle API proxy for Elastic deployment templates
   if (req.url === "/api/deployment-templates") {
     console.log("Proxying request to Elastic deployment templates API");
@@ -123,6 +128,18 @@ const server = http.createServer((req, res) => {
     });
 
     proxyReq.end();
+=======
+  // Health check endpoint
+  if (req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        telemetry: telemetry.isEnabled ? "enabled" : "disabled",
+      })
+    );
+>>>>>>> main
     return;
   }
 
@@ -218,4 +235,17 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}/`);
+  console.log(`OpenTelemetry enabled: ${telemetry.isEnabled ? "Yes" : "No"}`);
+});
+
+// Graceful shutdown for handling SIGTERM
+process.on("SIGTERM", () => {
+  console.log("SIGTERM signal received: closing HTTP server");
+  server.close(() => {
+    console.log("HTTP server closed");
+    // OpenTelemetry SDK shutdown is handled in telemetry.js
+    if (!telemetry.isEnabled) {
+      process.exit(0);
+    }
+  });
 });
