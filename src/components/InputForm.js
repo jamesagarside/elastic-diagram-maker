@@ -506,42 +506,7 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     );
   };
 
-  // Environment configuration section
-  const renderEnvironmentConfig = () => {
-    return (
-      <EuiAccordion
-        id="environment-config"
-        buttonContent="Environment Configuration"
-        paddingSize="s"
-        initialIsOpen={true}
-      >
-        <EuiFlexGroup>
-          <EuiFlexItem>
-            <EuiFormRow label="Deployment Template">
-              <EuiSelect
-                options={
-                  templates && templates.length > 0
-                    ? templates.map((template) => ({
-                        value: template.template_category_id,
-                        text: template.name || template.template_category_id,
-                      }))
-                    : []
-                }
-                isLoading={isLoadingTemplates}
-                onChange={(e) =>
-                  updateArchitecture({
-                    ...architecture,
-                    deploymentTemplate: e.target.value,
-                  })
-                }
-                value={architecture.deploymentTemplate}
-              />
-            </EuiFormRow>
-          </EuiFlexItem>
-        </EuiFlexGroup>
-      </EuiAccordion>
-    );
-  };
+  // Environment configuration section removed as requested
 
   return (
     <EuiPanel hasShadow={false} hasBorder>
@@ -902,9 +867,6 @@ const InputForm = ({ architecture, updateArchitecture }) => {
 
         <EuiSpacer size="m" />
         <EuiHorizontalRule />
-
-        {/* Environment Configuration */}
-        {renderEnvironmentConfig()}
 
         <EuiSpacer size="m" />
         <EuiTitle size="xs">
