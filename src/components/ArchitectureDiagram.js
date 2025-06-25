@@ -44,8 +44,8 @@ import agentIcon from "../img/icons/agent-icon.png";
 import enterpriseSearchIcon from "../img/icons/enterprise-search-icon.png";
 import integrationsServerIcon from "../img/icons/integrations-server-icon.png";
 
-import { useIntegrations } from "../assets/data-integrations";
-import { DEFAULT_ICON_URL } from "../assets/integration-icon-urls";
+import { useIntegrations } from "../assets/data-integrations.js";
+import { DEFAULT_ICON_URL } from "../assets/integration-icon-urls.js";
 
 // Custom hook to calculate optimal number of columns
 const useDynamicColumnCount = (containerRef, itemMinWidth = 150) => {

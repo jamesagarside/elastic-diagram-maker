@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 // Import the dynamic integrations fetching hook
-import { useIntegrations } from "../assets/data-integrations";
+import { useIntegrations } from "../assets/data-integrations.js";
 // Import the deployment templates hook
-import { useDeploymentTemplates } from "../assets/deployment-templates";
+import { useDeploymentTemplates } from "../assets/deployment-templates.js";
 // Import the instance configurations hook
 import {
   useRegionDeploymentTemplates,
@@ -11,7 +11,7 @@ import {
   calculateCPUCount,
 } from "../assets/instance-configurations";
 // Import the default icon URL
-import { DEFAULT_ICON_URL } from "../assets/integration-icon-urls";
+import { DEFAULT_ICON_URL } from "../assets/integration-icon-urls.js";
 import {
   EuiForm,
   EuiFormRow,
