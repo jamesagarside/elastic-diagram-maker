@@ -66,6 +66,23 @@
   object-fit: contain;
 }
 
+/* Resource info styling */
+.node-resources {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.resource-item {
+  font-size: 11px;
+  color: #69707D; /* Consistent grey color for all resource items */
+  padding: 0 3px;
+  white-space: nowrap;
+  margin: 0;
+}
+
 /* Fallback responsive styles (will be overridden by JavaScript) */
 @media (max-width: 768px) {
   .integration-item {

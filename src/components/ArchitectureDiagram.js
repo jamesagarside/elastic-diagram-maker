@@ -18,6 +18,13 @@ import {
 } from "@elastic/eui";
 import "./ArchitectureDiagram.css";
 
+// Import calculation helpers for disk size and CPU
+import {
+  calculateCPUCount,
+  calculateStorageSizeGB,
+  formatRatio,
+} from "../assets/instance-configurations";
+
 // Import the SVG logos (we'll keep these as fallbacks)
 import {
   elasticsearchLogo,
@@ -92,7 +99,26 @@ const useDynamicColumnCount = (containerRef, itemMinWidth = 150) => {
   return columnCount;
 };
 
-const ComponentNode = ({ icon, label, size, tier, imageIcon }) => {
+const ComponentNode = ({
+  icon,
+  label,
+  size,
+  tier,
+  imageIcon,
+  storageMultiplier,
+  cpuMultiplier,
+  showResourceInfo,
+}) => {
+  // Calculate storage size and CPU count if needed
+  const storageSize = showResourceInfo
+    ? calculateStorageSizeGB(size * 1024, storageMultiplier)
+    : null;
+  const cpuCount = showResourceInfo
+    ? calculateCPUCount(size * 1024, cpuMultiplier)
+    : null;
+  const storageRatio = showResourceInfo ? formatRatio(storageMultiplier) : null;
+  const cpuRatio = showResourceInfo ? formatRatio(cpuMultiplier) : null;
+
   return (
     <div className="component-node">
       <div className="component-icon">
@@ -106,7 +132,28 @@ const ComponentNode = ({ icon, label, size, tier, imageIcon }) => {
       </div>
       <div className="node-label">{label}</div>
       {tier && <div className="tier-label">{tier} Tier</div>}
-      <div className="node-size">{size}GB</div>
+
+      <div className="node-resources">
+        <span className="resource-item resource-ram">{size}GB RAM</span>
+
+        {/* Show storage and CPU info for Elasticsearch nodes */}
+        {showResourceInfo && (
+          <>
+            <span
+              className="resource-item resource-disk"
+              title={`Memory to Storage ratio ${storageRatio}`}
+            >
+              {storageSize}GB Disk ({storageRatio})
+            </span>
+            <span
+              className="resource-item resource-cpu"
+              title="Virtual CPU count"
+            >
+              {cpuCount} vCPU
+            </span>
+          </>
+        )}
+      </div>
     </div>
   );
 };
@@ -210,6 +257,15 @@ const ArchitectureDiagram = ({
     // If node size exceeds 64GB, split into multiple nodes
     const nodeSizes = getSplitNodeSizes(component.nodeSize);
 
+    // Check if we need to show resource information (storage and CPU)
+    // Only for Elasticsearch nodes and ml nodes
+    const isElasticsearchNode =
+      displayName === "Elasticsearch" || componentName === "mlNodes";
+    const showResourceInfo =
+      isElasticsearchNode &&
+      component.storageMultiplier !== undefined &&
+      component.cpuMultiplier !== undefined;
+
     return nodeSizes.map((nodeSize, index) => (
       <EuiFlexItem key={`${componentName}-${index}-az${azIndex}`}>
         <ComponentNode
@@ -218,6 +274,9 @@ const ArchitectureDiagram = ({
           tier={tier}
           size={nodeSize}
           imageIcon={imageIcon}
+          storageMultiplier={component.storageMultiplier}
+          cpuMultiplier={component.cpuMultiplier}
+          showResourceInfo={showResourceInfo}
         />
         {nodeSizes.length > 1 && (
           <div className="node-index">

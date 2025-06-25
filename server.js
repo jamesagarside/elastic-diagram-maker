@@ -125,6 +125,117 @@ const server = http.createServer((req, res) => {
     proxyReq.end();
     return;
   }
+  // Handle API proxy for Elastic deployment templates by region
+  else if (req.url.startsWith("/api/deployment-templates-by-region")) {
+    console.log(
+      "Proxying request to Elastic deployment templates by region API"
+    );
+
+    // Set CORS headers for all responses
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    // Handle OPTIONS pre-flight requests
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    // Extract the region parameter from the URL
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const regionId = url.searchParams.get("region");
+
+    if (!regionId) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Region parameter is required" }));
+      return;
+    }
+
+    console.log(`Fetching deployment templates for region: ${regionId}`);
+
+    // Fetch data from the Elastic API with the region parameter
+    const options = {
+      hostname: "cloud.elastic.co",
+      path: `/api/v1/deployments/templates?region=${encodeURIComponent(
+        regionId
+      )}`,
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "ElasticDiagramMaker/1.0",
+      },
+    };
+
+    console.log(`Calling: ${options.hostname}${options.path}`);
+
+    const proxyReq = https.request(options, (proxyRes) => {
+      let data = "";
+
+      // Handle HTTP status errors
+      if (proxyRes.statusCode !== 200) {
+        console.error(
+          `Elastic API responded with status ${proxyRes.statusCode}`
+        );
+        res.writeHead(proxyRes.statusCode, {
+          "Content-Type": "application/json",
+        });
+        res.end(
+          JSON.stringify({
+            error: `Elastic API responded with status ${proxyRes.statusCode}`,
+            message: proxyRes.statusMessage,
+          })
+        );
+        return;
+      }
+
+      proxyRes.on("data", (chunk) => {
+        data += chunk;
+      });
+
+      proxyRes.on("end", () => {
+        try {
+          // Try parsing the JSON to make sure it's valid
+          const parsedData = JSON.parse(data);
+          console.log(`Received deployment templates for region ${regionId}`);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(data);
+        } catch (e) {
+          console.error("Error parsing JSON from Elastic API:", e);
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: "Failed to parse deployment templates",
+              message: e.message,
+            })
+          );
+        }
+      });
+    });
+
+    // Set a timeout for the request
+    proxyReq.setTimeout(30000, () => {
+      console.error("Request to Elastic API timed out");
+      proxyReq.abort();
+      res.writeHead(504, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Request to Elastic API timed out" }));
+    });
+
+    proxyReq.on("error", (error) => {
+      console.error(`Error proxying to Elastic API: ${error}`);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: "Failed to fetch deployment templates",
+          message: error.message,
+        })
+      );
+    });
+
+    proxyReq.end();
+    return;
+  }
 
   // Handle favicon.ico
   if (req.url === "/favicon.ico") {

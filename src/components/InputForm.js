@@ -3,6 +3,13 @@ import React, { useState, useEffect } from "react";
 import { useIntegrations } from "../assets/data-integrations";
 // Import the deployment templates hook
 import { useDeploymentTemplates } from "../assets/deployment-templates";
+// Import the instance configurations hook
+import {
+  useRegionDeploymentTemplates,
+  formatSize,
+  calculateStorageSizeGB,
+  calculateCPUCount,
+} from "../assets/instance-configurations";
 // Import the default icon URL
 import { DEFAULT_ICON_URL } from "../assets/integration-icon-urls";
 import {
@@ -78,6 +85,13 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     setSelectedCloudProvider,
     setSelectedRegion,
   } = useDeploymentTemplates();
+
+  // Fetch region-specific deployment templates and instance configurations
+  const {
+    nodeSizes: dynamicNodeSizes,
+    loading: isLoadingInstanceConfig,
+    error: instanceConfigError,
+  } = useRegionDeploymentTemplates(selectedRegion, selectedHardwareProfile);
 
   // Initialize environment dropdown values from architecture state
   useEffect(() => {
@@ -270,6 +284,13 @@ const InputForm = ({ architecture, updateArchitecture }) => {
 
   const handleComponentNodeSizeChange = (componentName, value) => {
     const sizeValue = parseInt(value, 10);
+
+    // Get the storage and CPU multipliers from the dynamic node sizes if available
+    const componentConfig = dynamicNodeSizes[componentName];
+    const storageMultiplier = componentConfig?.storageMultiplier || 1.0;
+    const cpuMultiplier = componentConfig?.cpuMultiplier || 0.1;
+    const configId = componentConfig?.configId;
+
     updateArchitecture({
       ...architecture,
       components: {
@@ -277,6 +298,9 @@ const InputForm = ({ architecture, updateArchitecture }) => {
         [componentName]: {
           ...architecture.components[componentName],
           nodeSize: sizeValue,
+          storageMultiplier,
+          cpuMultiplier,
+          configId,
         },
       },
     });
@@ -284,6 +308,14 @@ const InputForm = ({ architecture, updateArchitecture }) => {
 
   const handleTierNodeSizeChange = (tier, value) => {
     const sizeValue = parseInt(value, 10);
+
+    // Get the storage and CPU multipliers from the dynamic node sizes if available
+    const tierKey = `elasticsearch.${tier}`;
+    const tierConfig = dynamicNodeSizes[tierKey];
+    const storageMultiplier = tierConfig?.storageMultiplier || 1.0;
+    const cpuMultiplier = tierConfig?.cpuMultiplier || 0.1;
+    const configId = tierConfig?.configId;
+
     updateArchitecture({
       ...architecture,
       components: {
@@ -295,6 +327,9 @@ const InputForm = ({ architecture, updateArchitecture }) => {
             [tier]: {
               ...architecture.components.elasticsearch.tiers[tier],
               nodeSize: sizeValue,
+              storageMultiplier,
+              cpuMultiplier,
+              configId,
             },
           },
         },
@@ -397,6 +432,70 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     return totalSize;
   };
 
+  // Calculate resources for a specific Elasticsearch tier
+  const calculateTierResources = (tierName) => {
+    const tier = architecture.components.elasticsearch.tiers[tierName];
+    if (!tier || !tier.enabled) return { ram: 0, disk: 0, cpu: 0 };
+
+    const totalRam = tier.azCount * tier.nodeSize;
+    const totalDisk = calculateStorageSizeGB(
+      totalRam * 1024,
+      tier.storageMultiplier
+    );
+    const totalCpu = calculateCPUCount(totalRam * 1024, tier.cpuMultiplier);
+
+    return {
+      ram: totalRam,
+      disk: totalDisk,
+      cpu: totalCpu.toFixed(1),
+    };
+  };
+
+  // Calculate resources for a non-Elasticsearch component
+  const calculateComponentResources = (componentName) => {
+    const component = architecture.components[componentName];
+    if (!component || !component.enabled) return { ram: 0, disk: 0, cpu: 0 };
+
+    const totalRam = component.azCount * component.nodeSize;
+    const totalDisk = calculateStorageSizeGB(
+      totalRam * 1024,
+      component.storageMultiplier || 1.0
+    );
+    const totalCpu = calculateCPUCount(
+      totalRam * 1024,
+      component.cpuMultiplier || 0.1
+    );
+
+    return {
+      ram: totalRam,
+      disk: totalDisk,
+      cpu: totalCpu.toFixed(1),
+    };
+  };
+
+  // Calculate overall storage capacity across all Elasticsearch tiers only
+  const calculateTotalStorageCapacity = () => {
+    let totalStorage = 0;
+
+    // Calculate storage for Elasticsearch tiers only
+    if (architecture.components.elasticsearch.enabled) {
+      const tierNames = ["hot", "warm", "cold", "frozen"];
+
+      tierNames.forEach((tierName) => {
+        const tier = architecture.components.elasticsearch.tiers[tierName];
+        if (tier && tier.enabled) {
+          const tierRam = tier.azCount * tier.nodeSize;
+          totalStorage += calculateStorageSizeGB(
+            tierRam * 1024,
+            tier.storageMultiplier
+          );
+        }
+      });
+    }
+
+    return totalStorage;
+  };
+
   // Calculate how many nodes are needed based on 64GB max size
   const calculateNodeCount = (component) => {
     if (!component || !component.nodeSize) return 1;
@@ -412,6 +511,35 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     if (!component || componentName === "elasticAgent") return null;
 
     if (!component.enabled) return null;
+
+    // Use dynamic node sizes if available for this component
+    const dynamicSizes = dynamicNodeSizes[componentName];
+
+    // Generate node size options based on available dynamic sizes or fallback to standard sizes
+    let componentNodeSizes = nodeSizes;
+    if (dynamicSizes && dynamicSizes.sizes) {
+      componentNodeSizes = dynamicSizes.sizes.map((size) => ({
+        value: size.toString(),
+        text: formatSize(size),
+      }));
+    }
+
+    // If we have dynamic sizes but the current selected size isn't in the list,
+    // update to use the default size from the template
+    if (
+      dynamicSizes &&
+      dynamicSizes.sizes &&
+      !dynamicSizes.sizes.includes(component.nodeSize * 1024) && // Convert GB to MB for comparison
+      dynamicSizes.defaultSize
+    ) {
+      // Schedule an update to use the default size
+      setTimeout(() => {
+        handleComponentNodeSizeChange(
+          componentName,
+          dynamicSizes.defaultSize / 1024
+        ); // Convert MB to GB
+      }, 0);
+    }
 
     return (
       <EuiAccordion
@@ -444,11 +572,17 @@ const InputForm = ({ architecture, updateArchitecture }) => {
               }
             >
               <EuiSelect
-                options={nodeSizes}
-                value={component.nodeSize?.toString()}
-                onChange={(e) =>
-                  handleComponentNodeSizeChange(componentName, e.target.value)
-                }
+                options={componentNodeSizes}
+                value={(component.nodeSize * 1024).toString()} // Convert to MB if using dynamic sizes
+                onChange={(e) => {
+                  // Convert from MB to GB if using dynamic sizes
+                  const value = dynamicSizes
+                    ? parseInt(e.target.value) / 1024
+                    : e.target.value;
+                  handleComponentNodeSizeChange(componentName, value);
+                }}
+                isLoading={isLoadingInstanceConfig}
+                isDisabled={isLoadingInstanceConfig}
               />
             </EuiFormRow>
           </EuiFlexItem>
@@ -461,6 +595,32 @@ const InputForm = ({ architecture, updateArchitecture }) => {
   const renderTierConfig = (tierName, displayName) => {
     const tier = architecture.components.elasticsearch.tiers[tierName];
     if (!tier.enabled) return null;
+
+    // Use dynamic node sizes if available for this tier
+    const dynamicSizes = dynamicNodeSizes[`elasticsearch.${tierName}`];
+
+    // Generate node size options based on available dynamic sizes or fallback to standard sizes
+    let tierNodeSizes = nodeSizes;
+    if (dynamicSizes && dynamicSizes.sizes) {
+      tierNodeSizes = dynamicSizes.sizes.map((size) => ({
+        value: size.toString(),
+        text: formatSize(size),
+      }));
+    }
+
+    // If we have dynamic sizes but the current selected size isn't in the list,
+    // update to use the default size from the template
+    if (
+      dynamicSizes &&
+      dynamicSizes.sizes &&
+      !dynamicSizes.sizes.includes(tier.nodeSize * 1024) && // Convert GB to MB for comparison
+      dynamicSizes.defaultSize
+    ) {
+      // Schedule an update to use the default size
+      setTimeout(() => {
+        handleTierNodeSizeChange(tierName, dynamicSizes.defaultSize / 1024); // Convert MB to GB
+      }, 0);
+    }
 
     return (
       <EuiAccordion
@@ -493,11 +653,17 @@ const InputForm = ({ architecture, updateArchitecture }) => {
               }
             >
               <EuiSelect
-                options={nodeSizes}
-                value={tier.nodeSize?.toString()}
-                onChange={(e) =>
-                  handleTierNodeSizeChange(tierName, e.target.value)
-                }
+                options={tierNodeSizes}
+                value={(tier.nodeSize * 1024).toString()} // Convert to MB if using dynamic sizes
+                onChange={(e) => {
+                  // Convert from MB to GB if using dynamic sizes
+                  const value = dynamicSizes
+                    ? parseInt(e.target.value) / 1024
+                    : e.target.value;
+                  handleTierNodeSizeChange(tierName, value);
+                }}
+                isLoading={isLoadingInstanceConfig}
+                isDisabled={isLoadingInstanceConfig}
               />
             </EuiFormRow>
           </EuiFlexItem>
@@ -870,14 +1036,468 @@ const InputForm = ({ architecture, updateArchitecture }) => {
 
         <EuiSpacer size="m" />
         <EuiTitle size="xs">
-          <h3>Estimated Cluster Size</h3>
+          <h3>Cluster Size</h3>
         </EuiTitle>
         <EuiSpacer size="s" />
-        <EuiText size="s">
-          <p>
-            Total memory: <strong>{estimateClusterSize()} GB</strong>
-          </p>
-        </EuiText>
+
+        <EuiPanel hasShadow={false} paddingSize="s" hasBorder>
+          {architecture.components.elasticsearch.enabled && (
+            <>
+              <EuiText size="s">
+                <p style={{ margin: "0 0 8px 0", fontWeight: "600" }}>
+                  Elasticsearch Resource Breakdown
+                </p>
+              </EuiText>
+
+              <div
+                style={{
+                  display: "table",
+                  width: "100%",
+                  fontSize: "12px",
+                  borderCollapse: "collapse",
+                  marginBottom: "8px",
+                }}
+              >
+                {/* Table Header */}
+                <div
+                  style={{
+                    display: "table-row",
+                    backgroundColor: "#F5F7FA",
+                    fontWeight: "500",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "table-cell",
+                      padding: "8px",
+                      borderBottom: "1px solid #D3DAE6",
+                    }}
+                  >
+                    Component
+                  </div>
+                  <div
+                    style={{
+                      display: "table-cell",
+                      padding: "8px",
+                      borderBottom: "1px solid #D3DAE6",
+                    }}
+                  >
+                    RAM
+                  </div>
+                  <div
+                    style={{
+                      display: "table-cell",
+                      padding: "8px",
+                      borderBottom: "1px solid #D3DAE6",
+                    }}
+                  >
+                    Disk
+                  </div>
+                  <div
+                    style={{
+                      display: "table-cell",
+                      padding: "8px",
+                      borderBottom: "1px solid #D3DAE6",
+                    }}
+                  >
+                    vCPU
+                  </div>
+                </div>
+
+                {/* Elasticsearch Tiers */}
+                {architecture.components.elasticsearch.tiers.hot.enabled && (
+                  <div style={{ display: "table-row" }}>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      Hot Tier
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("hot").ram} GB
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("hot").disk} GB
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("hot").cpu}
+                    </div>
+                  </div>
+                )}
+
+                {architecture.components.elasticsearch.tiers.warm.enabled && (
+                  <div style={{ display: "table-row" }}>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      Warm Tier
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("warm").ram} GB
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("warm").disk} GB
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("warm").cpu}
+                    </div>
+                  </div>
+                )}
+
+                {architecture.components.elasticsearch.tiers.cold.enabled && (
+                  <div style={{ display: "table-row" }}>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      Cold Tier
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("cold").ram} GB
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("cold").disk} GB
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("cold").cpu}
+                    </div>
+                  </div>
+                )}
+
+                {architecture.components.elasticsearch.tiers.frozen.enabled && (
+                  <div style={{ display: "table-row" }}>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      Frozen Tier
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("frozen").ram} GB
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("frozen").disk} GB
+                    </div>
+                    <div
+                      style={{
+                        display: "table-cell",
+                        padding: "8px",
+                        borderBottom: "1px solid #EEF0F4",
+                      }}
+                    >
+                      {calculateTierResources("frozen").cpu}
+                    </div>
+                  </div>
+                )}
+
+                {/* Machine Learning */}
+                {architecture.components.mlNodes &&
+                  architecture.components.mlNodes.enabled && (
+                    <div style={{ display: "table-row" }}>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        Machine Learning
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        {architecture.components.mlNodes.azCount *
+                          architecture.components.mlNodes.nodeSize}{" "}
+                        GB
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        -
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        {calculateCPUCount(
+                          architecture.components.mlNodes.azCount *
+                            architecture.components.mlNodes.nodeSize *
+                            1024,
+                          architecture.components.mlNodes.cpuMultiplier || 0.1
+                        ).toFixed(1)}
+                      </div>
+                    </div>
+                  )}
+
+                {/* Enterprise Search */}
+                {architecture.components.enterpriseSearch &&
+                  architecture.components.enterpriseSearch.enabled && (
+                    <div style={{ display: "table-row" }}>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        Enterprise Search
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        {architecture.components.enterpriseSearch.azCount *
+                          architecture.components.enterpriseSearch
+                            .nodeSize}{" "}
+                        GB
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        -
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        {calculateCPUCount(
+                          architecture.components.enterpriseSearch.azCount *
+                            architecture.components.enterpriseSearch.nodeSize *
+                            1024,
+                          architecture.components.enterpriseSearch
+                            .cpuMultiplier || 0.1
+                        ).toFixed(1)}
+                      </div>
+                    </div>
+                  )}
+
+                {/* Kibana */}
+                {architecture.components.kibana &&
+                  architecture.components.kibana.enabled && (
+                    <div style={{ display: "table-row" }}>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        Kibana
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        {architecture.components.kibana.azCount *
+                          architecture.components.kibana.nodeSize}{" "}
+                        GB
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        -
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        {calculateCPUCount(
+                          architecture.components.kibana.azCount *
+                            architecture.components.kibana.nodeSize *
+                            1024,
+                          architecture.components.kibana.cpuMultiplier || 0.1
+                        ).toFixed(1)}
+                      </div>
+                    </div>
+                  )}
+
+                {/* Integrations Server */}
+                {architecture.components.integrationsServer &&
+                  architecture.components.integrationsServer.enabled && (
+                    <div style={{ display: "table-row" }}>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        Integrations Server
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        {architecture.components.integrationsServer.azCount *
+                          architecture.components.integrationsServer
+                            .nodeSize}{" "}
+                        GB
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        -
+                      </div>
+                      <div
+                        style={{
+                          display: "table-cell",
+                          padding: "8px",
+                          borderBottom: "1px solid #EEF0F4",
+                        }}
+                      >
+                        {calculateCPUCount(
+                          architecture.components.integrationsServer.azCount *
+                            architecture.components.integrationsServer
+                              .nodeSize *
+                            1024,
+                          architecture.components.integrationsServer
+                            .cpuMultiplier || 0.1
+                        ).toFixed(1)}
+                      </div>
+                    </div>
+                  )}
+              </div>
+
+              <EuiHorizontalRule margin="xs" />
+
+              <div style={{ margin: "8px 0 0 0" }}>
+                <EuiText size="s">
+                  <p style={{ margin: "0 0 8px 0", fontWeight: "600" }}>
+                    Total Storage Capacity: {calculateTotalStorageCapacity()} GB
+                  </p>
+                  <p style={{ margin: "0", fontWeight: "600" }}>
+                    Total Memory: {estimateClusterSize()} GB
+                  </p>
+                </EuiText>
+              </div>
+            </>
+          )}
+
+          {!architecture.components.elasticsearch.enabled && (
+            <EuiText size="s">
+              <p style={{ margin: "0", fontWeight: "600" }}>
+                Total Memory: {estimateClusterSize()} GB
+              </p>
+            </EuiText>
+          )}
+        </EuiPanel>
 
         <EuiSpacer size="m" />
         <EuiButtonEmpty onClick={resetForm}>Reset to Default</EuiButtonEmpty>
