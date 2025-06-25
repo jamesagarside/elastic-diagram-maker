@@ -5,6 +5,7 @@ const telemetry = initializeOpenTelemetry();
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const https = require("https");
 
 const PORT = process.env.PORT || 3000;
 const MIME_TYPES = {
@@ -17,18 +18,117 @@ const MIME_TYPES = {
   ".gif": "image/gif",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".eot": "application/vnd.ms-fontobject",
+  ".otf": "font/otf",
 };
 
-// Root directory for static files
-// Use "build" directory in production, "public" in development
-const PUBLIC_DIR =
-  process.env.NODE_ENV === "production"
-    ? path.join(__dirname, "build")
-    : path.join(__dirname, "public");
+// We'll always serve from the build directory for both production and development
+// This way we can avoid React dev server conflicts
+const PUBLIC_DIR = path.join(__dirname, "build");
 
 const server = http.createServer((req, res) => {
   console.log(`Request: ${req.url}`);
 
+<<<<<<< remove-otel
+  // Handle API proxy for Elastic deployment templates
+  if (req.url === "/api/deployment-templates") {
+    console.log("Proxying request to Elastic deployment templates API");
+
+    // Set CORS headers for all responses
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    // Handle OPTIONS pre-flight requests
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    // Fetch data from the actual Elastic API
+    const options = {
+      hostname: "cloud.elastic.co",
+      path: "/api/v1/platform/configuration/templates/deployments/global",
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "ElasticDiagramMaker/1.0",
+      },
+    };
+
+    console.log("Fetching data from Elastic API...");
+
+    const proxyReq = https.request(options, (proxyRes) => {
+      let data = "";
+
+      // Handle HTTP status errors
+      if (proxyRes.statusCode !== 200) {
+        console.error(
+          `Elastic API responded with status ${proxyRes.statusCode}`
+        );
+        res.writeHead(proxyRes.statusCode, {
+          "Content-Type": "application/json",
+        });
+        res.end(
+          JSON.stringify({
+            error: `Elastic API responded with status ${proxyRes.statusCode}`,
+            message: proxyRes.statusMessage,
+          })
+        );
+        return;
+      }
+
+      proxyRes.on("data", (chunk) => {
+        data += chunk;
+      });
+
+      proxyRes.on("end", () => {
+        try {
+          // Try parsing the JSON to make sure it's valid
+          const parsedData = JSON.parse(data);
+          console.log(
+            `Received ${parsedData.length} deployment templates from Elastic API`
+          );
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(data);
+        } catch (e) {
+          console.error("Error parsing JSON from Elastic API:", e);
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: "Failed to parse deployment templates",
+              message: e.message,
+            })
+          );
+        }
+      });
+    });
+
+    // Set a timeout for the request
+    proxyReq.setTimeout(30000, () => {
+      console.error("Request to Elastic API timed out");
+      proxyReq.abort();
+      res.writeHead(504, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Request to Elastic API timed out" }));
+    });
+
+    proxyReq.on("error", (error) => {
+      console.error(`Error proxying to Elastic API: ${error}`);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: "Failed to fetch deployment templates",
+          message: error.message,
+        })
+      );
+    });
+
+    proxyReq.end();
+=======
   // Health check endpoint
   if (req.url === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -39,6 +139,7 @@ const server = http.createServer((req, res) => {
         telemetry: telemetry.isEnabled ? "enabled" : "disabled",
       })
     );
+>>>>>>> main
     return;
   }
 
@@ -64,14 +165,34 @@ const server = http.createServer((req, res) => {
 
   // Normalize URL
   let filePath;
-  // Fix for %PUBLIC_URL% paths
-  const url = req.url.replace(/%PUBLIC_URL%\//g, "");
 
-  if (url === "/") {
+  // Clean up the URL
+  let url = req.url;
+
+  // Remove query parameters
+  if (url.includes("?")) {
+    url = url.split("?")[0];
+  }
+
+  // Handle the root path
+  if (url === "/" || url === "") {
     filePath = path.join(PUBLIC_DIR, "index.html");
-  } else {
-    // Remove leading slash and use the path as is
+  }
+  // Handle API endpoints
+  else if (url.startsWith("/api/")) {
+    if (url !== "/api/deployment-templates") {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "API endpoint not found" }));
+      return;
+    }
+    // The /api/deployment-templates endpoint is handled separately
+  }
+  // Handle all other requests as static file requests
+  else {
+    // Remove leading slash and clean URL
     const urlPath = url.startsWith("/") ? url.substring(1) : url;
+
+    // Create file path
     filePath = path.join(PUBLIC_DIR, urlPath);
   }
 
@@ -83,27 +204,23 @@ const server = http.createServer((req, res) => {
       if (error.code === "ENOENT") {
         console.error(`File not found: ${filePath}`);
 
-        // If a specific file is not found, try serving index.html (for SPA routing)
-        if (!url.includes(".")) {
-          fs.readFile(
-            path.join(PUBLIC_DIR, "index.html"),
-            (indexErr, indexContent) => {
-              if (indexErr) {
-                res.writeHead(404);
-                res.end("404 - File Not Found");
-              } else {
-                // In production mode, we need to serve the processed index.html
-                let indexContent_str = indexContent.toString();
-                // No need to replace %PUBLIC_URL% as it's already handled in the build
-                res.writeHead(200, { "Content-Type": "text/html" });
-                res.end(indexContent, "utf-8");
-              }
+        // For all routes that don't match physical files, serve index.html for SPA
+        // This allows React Router to handle those routes
+        fs.readFile(
+          path.join(PUBLIC_DIR, "index.html"),
+          (indexErr, indexContent) => {
+            if (indexErr) {
+              console.error(`Error reading index.html: ${indexErr.code}`);
+              res.writeHead(404);
+              res.end("404 - File Not Found");
+            } else {
+              // In production mode, we need to serve the processed index.html
+              console.log(`Serving index.html for route: ${req.url}`);
+              res.writeHead(200, { "Content-Type": "text/html" });
+              res.end(indexContent, "utf-8");
             }
-          );
-        } else {
-          res.writeHead(404);
-          res.end("404 - File Not Found");
-        }
+          }
+        );
       } else {
         console.error(`Server error: ${error.code}`);
         res.writeHead(500);

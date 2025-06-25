@@ -7,6 +7,7 @@ A web application for creating visual representations of Elastic Stack diagrams.
 - Design your Elastic Stack diagram with customizable components
 - Specify the number of availability zones and node sizes
 - Include Elasticsearch (Hot, Warm, Cold, and Frozen tiers), Kibana, Machine Learning nodes, Enterprise Search, Integrations Server, Logstash, and Elastic Agent
+- Select Hardware Profile, Cloud Provider, and Region configurations based on real Elastic Cloud deployment templates
 - Download your diagram as a PNG image
 - Estimate the total memory requirements for your deployment
 
@@ -51,6 +52,34 @@ npm start
 2. The diagram diagram will update in real-time as you make changes
 
 3. Click the "Download as PNG" button to save your diagram diagram
+
+### Development Mode
+
+```
+make dev
+```
+
+### Development Server Mode (with API support)
+
+```
+make server-dev
+```
+
+### Production Build
+
+```
+make prod
+```
+
+### Environment Configuration
+
+The application includes dynamic environment configuration dropdowns:
+
+1. **Hardware Profile**: Select from various hardware profiles optimized for different workloads
+2. **Cloud Provider**: Choose between AWS, Azure, or GCP (options are filtered based on hardware profile)
+3. **Region**: Select a region for deployment (options are filtered based on hardware profile and cloud provider)
+
+These dropdowns are dynamically populated with data from the Elastic Cloud API, ensuring you always have the latest configuration options available.
 
 ## Building for Production
 

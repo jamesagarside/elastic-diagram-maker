@@ -37,6 +37,11 @@ function App() {
   const fileInputRef = useRef(null);
 
   const [architecture, setArchitecture] = useState({
+    environment: {
+      hardwareProfile: "general-purpose", // Default hardware profile
+      cloudProvider: "aws", // Default cloud provider
+      region: "", // Region will be set dynamically based on available options
+    },
     components: {
       kibana: {
         enabled: false,

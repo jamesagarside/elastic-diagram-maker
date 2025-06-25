@@ -57,7 +57,7 @@ reinstall:
 	@echo "${GREEN}✓ Dependencies reinstalled successfully${NC}"
 
 # Run in development mode
-dev: check-node-version
+dev: server-dev
 	@echo "${CYAN}Starting development server on port ${PORT}...${NC}"
 	PORT=$(PORT) NODE_ENV=development npx react-scripts start
 
@@ -66,6 +66,11 @@ build: check-node-version
 	@echo "${CYAN}Building for production...${NC}"
 	NODE_ENV=production npx react-scripts build
 	@echo "${GREEN}✓ Build completed successfully${NC}"
+
+# Run server in development mode
+server-dev:
+	@echo "${CYAN}Starting development server on port ${PORT}...${NC}"
+	PORT=$(PORT) npm run server:dev
 
 # Serve the built application
 serve:

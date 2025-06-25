@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 // Import the dynamic integrations fetching hook
 import { useIntegrations } from "../assets/data-integrations";
+// Import the deployment templates hook
+import { useDeploymentTemplates } from "../assets/deployment-templates";
 // Import the default icon URL
 import { DEFAULT_ICON_URL } from "../assets/integration-icon-urls";
 import {
@@ -60,6 +62,131 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     loading: isLoadingIntegrations,
     error: integrationsError,
   } = useIntegrations();
+
+  // Fetch deployment templates dynamically using our custom hook
+  const {
+    templates,
+    loading: isLoadingTemplates,
+    error: templatesError,
+    hardwareProfiles,
+    cloudProviders,
+    regions,
+    selectedHardwareProfile,
+    selectedCloudProvider,
+    selectedRegion,
+    setSelectedHardwareProfile,
+    setSelectedCloudProvider,
+    setSelectedRegion,
+  } = useDeploymentTemplates();
+
+  // Initialize environment dropdown values from architecture state
+  useEffect(() => {
+    // If the architecture state has environment configuration, use those values
+    if (architecture.environment) {
+      // Special handling for hardware profile
+      if (
+        architecture.environment.hardwareProfile &&
+        hardwareProfiles.length > 0
+      ) {
+        // Check if the stored hardwareProfile exists in available profiles
+        const profileExists = hardwareProfiles.some(
+          (profile) =>
+            profile.value === architecture.environment.hardwareProfile
+        );
+
+        if (profileExists) {
+          if (
+            selectedHardwareProfile !== architecture.environment.hardwareProfile
+          ) {
+            setSelectedHardwareProfile(
+              architecture.environment.hardwareProfile
+            );
+          }
+        } else if (hardwareProfiles.length > 0) {
+          // If stored profile doesn't exist, update architecture with first available profile
+          updateArchitecture({
+            ...architecture,
+            environment: {
+              ...architecture.environment,
+              hardwareProfile: hardwareProfiles[0].value,
+            },
+          });
+        }
+      }
+
+      // Special handling for cloud provider
+      if (architecture.environment.cloudProvider && cloudProviders.length > 0) {
+        // Check if the stored cloudProvider exists in available providers
+        const providerExists = cloudProviders.some(
+          (provider) =>
+            provider.value === architecture.environment.cloudProvider
+        );
+
+        if (providerExists) {
+          if (
+            selectedCloudProvider !== architecture.environment.cloudProvider
+          ) {
+            setSelectedCloudProvider(architecture.environment.cloudProvider);
+          }
+        } else if (cloudProviders.length > 0) {
+          // If stored provider doesn't exist, update architecture with first available provider
+          updateArchitecture({
+            ...architecture,
+            environment: {
+              ...architecture.environment,
+              cloudProvider: cloudProviders[0].value,
+            },
+          });
+        }
+      }
+
+      // Special handling for region
+      if (architecture.environment.region && regions.length > 0) {
+        // Check if the stored region exists in available regions
+        const regionExists = regions.some(
+          (region) => region.value === architecture.environment.region
+        );
+
+        if (regionExists) {
+          if (selectedRegion !== architecture.environment.region) {
+            setSelectedRegion(architecture.environment.region);
+          }
+        } else if (regions.length > 0) {
+          // If stored region doesn't exist or is empty, update architecture with first available region
+          updateArchitecture({
+            ...architecture,
+            environment: {
+              ...architecture.environment,
+              region: regions[0].value,
+            },
+          });
+          setSelectedRegion(regions[0].value);
+        }
+      } else if (regions.length > 0 && !architecture.environment.region) {
+        // If no region is set but regions are available, set the first region
+        updateArchitecture({
+          ...architecture,
+          environment: {
+            ...architecture.environment,
+            region: regions[0].value,
+          },
+        });
+        setSelectedRegion(regions[0].value);
+      }
+    }
+  }, [
+    architecture.environment,
+    hardwareProfiles,
+    cloudProviders,
+    regions,
+    updateArchitecture,
+    selectedHardwareProfile,
+    selectedCloudProvider,
+    selectedRegion,
+    setSelectedHardwareProfile,
+    setSelectedCloudProvider,
+    setSelectedRegion,
+  ]);
 
   const handleComponentToggle = (componentName) => {
     if (componentName === "elasticsearch") {
@@ -177,6 +304,11 @@ const InputForm = ({ architecture, updateArchitecture }) => {
 
   const resetForm = () => {
     updateArchitecture({
+      environment: {
+        hardwareProfile: "general-purpose", // Default hardware profile
+        cloudProvider: "aws", // Default cloud provider
+        region: regions.length > 0 ? regions[0].value : "", // First available region
+      },
       components: {
         kibana: {
           enabled: false,
@@ -374,6 +506,8 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     );
   };
 
+  // Environment configuration section removed as requested
+
   return (
     <EuiPanel hasShadow={false} hasBorder>
       <EuiTitle size="s">
@@ -382,6 +516,102 @@ const InputForm = ({ architecture, updateArchitecture }) => {
       <EuiSpacer size="m" />
 
       <EuiForm component="form">
+        {/* Environment Configuration */}
+        <EuiTitle size="xs">
+          <h3>Environment Configuration</h3>
+        </EuiTitle>
+        <EuiSpacer size="s" />
+
+        {isLoadingTemplates ? (
+          <EuiFlexGroup alignItems="center" gutterSize="s">
+            <EuiFlexItem grow={false}>
+              <EuiLoadingSpinner size="m" />
+            </EuiFlexItem>
+            <EuiFlexItem grow>
+              <EuiText size="s">Loading deployment templates...</EuiText>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        ) : templatesError ? (
+          <EuiText color="danger" size="s">
+            Error loading deployment templates: {templatesError}
+          </EuiText>
+        ) : (
+          <>
+            {/* Hardware Profile Dropdown */}
+            <EuiFormRow
+              label="Hardware Profile"
+              helpText="Select the hardware profile for your deployment"
+            >
+              <EuiSelect
+                options={hardwareProfiles}
+                value={selectedHardwareProfile}
+                onChange={(e) => {
+                  setSelectedHardwareProfile(e.target.value);
+                  // Update architecture state with selected hardware profile
+                  updateArchitecture({
+                    ...architecture,
+                    environment: {
+                      ...architecture.environment,
+                      hardwareProfile: e.target.value,
+                    },
+                  });
+                }}
+                aria-label="Select Hardware Profile"
+              />
+            </EuiFormRow>
+
+            {/* Cloud Provider Dropdown */}
+            <EuiFormRow
+              label="Cloud Provider"
+              helpText="Select the cloud provider for your deployment"
+            >
+              <EuiSelect
+                options={cloudProviders}
+                value={selectedCloudProvider}
+                onChange={(e) => {
+                  setSelectedCloudProvider(e.target.value);
+                  // Update architecture state with selected cloud provider
+                  updateArchitecture({
+                    ...architecture,
+                    environment: {
+                      ...architecture.environment,
+                      cloudProvider: e.target.value,
+                    },
+                  });
+                }}
+                aria-label="Select Cloud Provider"
+                isDisabled={cloudProviders.length === 0}
+              />
+            </EuiFormRow>
+
+            {/* Region Dropdown */}
+            <EuiFormRow
+              label="Region"
+              helpText="Select the region for your deployment"
+            >
+              <EuiSelect
+                options={regions}
+                value={selectedRegion}
+                onChange={(e) => {
+                  setSelectedRegion(e.target.value);
+                  // Update architecture state with selected region
+                  updateArchitecture({
+                    ...architecture,
+                    environment: {
+                      ...architecture.environment,
+                      region: e.target.value,
+                    },
+                  });
+                }}
+                aria-label="Select Region"
+                isDisabled={regions.length === 0}
+              />
+            </EuiFormRow>
+          </>
+        )}
+
+        <EuiSpacer size="m" />
+
         <EuiTitle size="xs">
           <h3>Components</h3>
         </EuiTitle>
@@ -509,6 +739,13 @@ const InputForm = ({ architecture, updateArchitecture }) => {
         </EuiFormRow>
         {renderComponentConfig("integrationsServer", "Integrations Server")}
 
+        {/* Data Collection Section */}
+        <EuiSpacer size="m" />
+        <EuiTitle size="xs">
+          <h3>Data Collection</h3>
+        </EuiTitle>
+        <EuiSpacer size="s" />
+
         {/* Logstash */}
         <EuiFormRow hasChildLabel={false}>
           <EuiSwitch
@@ -631,6 +868,7 @@ const InputForm = ({ architecture, updateArchitecture }) => {
         <EuiSpacer size="m" />
         <EuiHorizontalRule />
 
+        <EuiSpacer size="m" />
         <EuiTitle size="xs">
           <h3>Estimated Cluster Size</h3>
         </EuiTitle>

@@ -16,6 +16,7 @@ code {
 .header-logo {
   display: flex;
   align-items: center;
+  padding-left: 5px;
   justify-content: center;
 }
 
@@ -183,6 +184,17 @@ code {
   list-style-type: none;
   padding-left: 0;
   margin-top: 8px;
+}
+
+/* Add top padding to the main page container */
+.euiPage {
+  padding-top: 5px !important;
+}
+
+/* Add padding to the page header section with title */
+.euiPageHeader {
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
 }
 
 .integration-item {
