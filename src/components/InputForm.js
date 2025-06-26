@@ -295,6 +295,37 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     });
   };
 
+  const handleTierNodeSizeChange = (tierName, value) => {
+    const sizeValue = parseInt(value, 10);
+
+    // Get the storage and CPU multipliers from the dynamic node sizes if available
+    const tierConfig = dynamicNodeSizes[`elasticsearch.${tierName}`];
+    const storageMultiplier = tierConfig?.storageMultiplier || 1.0;
+    const cpuMultiplier = tierConfig?.cpuMultiplier || 0.1;
+    const configId = tierConfig?.configId;
+
+    updateArchitecture({
+      ...architecture,
+      components: {
+        ...architecture.components,
+        elasticsearch: {
+          ...architecture.components.elasticsearch,
+          tiers: {
+            ...architecture.components.elasticsearch.tiers,
+            [tierName]: {
+              ...architecture.components.elasticsearch.tiers[tierName],
+              nodeSize: sizeValue,
+              cpuValue: Math.round(sizeValue * cpuMultiplier * 10) / 10,
+              memoryValue: sizeValue,
+              storageValue: Math.round(sizeValue * storageMultiplier),
+              instanceConfigId: configId || undefined,
+            },
+          },
+        },
+      },
+    });
+  };
+
   const handleComponentNodeSizeChange = (componentName, value) => {
     const sizeValue = parseInt(value, 10);
 
