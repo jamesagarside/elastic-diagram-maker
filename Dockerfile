@@ -1,5 +1,5 @@
 # Use Node.js as the base image
-FROM node:18-alpine as build
+FROM node:18-alpine AS build
 
 # Set the working directory in the container
 WORKDIR /app
@@ -17,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # Use a smaller Node.js image for the production environment
-FROM node:18-alpine as production
+FROM node:18-alpine AS production
 
 # Set the working directory
 WORKDIR /app
@@ -31,7 +31,7 @@ COPY --from=build /app/build ./build
 
 # Install production dependencies only
 COPY package*.json ./
-RUN npm install --only=production
+RUN npm ci --omit=dev
 
 # Expose the port on which the app will run
 EXPOSE 3001
@@ -47,4 +47,4 @@ ENV PORT=3001
 # ENV OTEL_RESOURCE_ATTRIBUTES=deployment.environment=prod,service.instance.id=instance-1
 
 # Start the server in production mode
-CMD ["node", "-e", "process.env.NODE_ENV='production'; require('./server.js')"]
+CMD ["node", "server.js"]

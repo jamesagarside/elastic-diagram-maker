@@ -9,7 +9,7 @@ import {
   formatSize,
   calculateStorageSizeGB,
   calculateCPUCount,
-} from "../assets/instance-configurations";
+} from "../assets/instance-configurations.js";
 // Import the default icon URL
 import { DEFAULT_ICON_URL } from "../assets/integration-icon-urls.js";
 import {
