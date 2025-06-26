@@ -24,14 +24,16 @@ WORKDIR /app
 
 # Copy the server files
 COPY server.js ./server.js
-COPY telemetry.js ./telemetry.js
 
 # Create a build directory and copy all the build files there (including subdirectories)
 COPY --from=build /app/build ./build
 
 # Install production dependencies only
-COPY package*.json ./
-RUN npm ci --omit=dev
+COPY package.json ./
+# Make sure WebSocket dependency is installed 
+# Try npm ci first (faster and more reliable when package-lock.json exists)
+# If it fails, fall back to npm install with production flag
+RUN npm ci --omit=dev || npm install --omit=dev && npm install ws
 
 # Expose the port on which the app will run
 EXPOSE 3001
@@ -46,5 +48,5 @@ ENV PORT=3001
 # ENV OTEL_EXPORTER_OTLP_HEADERS=api-key=your-api-key,authorization=your-auth-token
 # ENV OTEL_RESOURCE_ATTRIBUTES=deployment.environment=prod,service.instance.id=instance-1
 
-# Start the server in production mode
+# Start the server in production mode with WebSocket support
 CMD ["node", "server.js"]

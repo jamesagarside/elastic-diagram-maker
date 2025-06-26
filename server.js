@@ -2,6 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
+const WebSocket = require("ws");
 
 const PORT = process.env.PORT || 3000;
 const MIME_TYPES = {
@@ -237,6 +238,15 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Handle WebSocket specific paths (CRA typically uses /ws)
+  else if (req.url.startsWith("/ws")) {
+    // WebSockets are handled by the WebSocket server
+    // This just prevents 404 errors in the console
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
   // Handle favicon.ico
   if (req.url === "/favicon.ico") {
     const faviconPath = path.join(PUBLIC_DIR, "favicon.ico");
@@ -327,6 +337,25 @@ const server = http.createServer((req, res) => {
   });
 });
 
+// Create WebSocket server
+const wss = new WebSocket.Server({ server });
+
+wss.on("connection", function connection(ws) {
+  console.log("WebSocket client connected");
+
+  ws.on("message", function incoming(message) {
+    console.log("Received WebSocket message:", message);
+  });
+
+  ws.on("error", function error(err) {
+    console.error("WebSocket error:", err);
+  });
+
+  ws.on("close", function close() {
+    console.log("WebSocket client disconnected");
+  });
+});
+
 server.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}/`);
 });
@@ -337,7 +366,9 @@ process.on("SIGTERM", () => {
   server.close(() => {
     console.log("HTTP server closed");
     // OpenTelemetry SDK shutdown is handled in telemetry.js
-    if (!telemetry.isEnabled) {
+    if (typeof telemetry !== "undefined" && !telemetry.isEnabled) {
+      process.exit(0);
+    } else {
       process.exit(0);
     }
   });

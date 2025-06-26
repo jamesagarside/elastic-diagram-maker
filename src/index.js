@@ -5,6 +5,8 @@ import App from "./App";
 
 // Import EUI themes and styles
 import "@elastic/eui/dist/eui_theme_light.css";
+// Import our custom icon registrations
+import "./assets/eui-icons";
 
 ReactDOM.render(
   <React.StrictMode>

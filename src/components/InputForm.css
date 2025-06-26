@@ -83,3 +83,45 @@
   display: flex;
   justify-content: center;
 }
+
+/* Agent collapse toggle button styling */
+.agent-collapse-toggle {
+  cursor: pointer;
+}
+
+.agent-collapse-toggle:hover {
+  background-color: #e6ebf2;
+}
+
+/* Transition for collapsing/expanding agent details */
+.agent-details-container {
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+}
+
+.agent-details-container.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.agent-details-container.expanded {
+  max-height: 2000px;
+  opacity: 1;
+}
+
+.agent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+/* Summary of integrations when collapsed */
+.agent-summary {
+  font-size: 11px;
+  color: #69707D;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  background-color: rgba(0,0,0,0.03);
+}

@@ -21,7 +21,7 @@ RED = \033[0;31m
 NC = \033[0m # No Color
 
 # Main targets
-.PHONY: help install reinstall dev build serve prod docker-build docker-run clean-all check-node-version
+.PHONY: help install reinstall dev build serve prod docker-build docker-run docker-rebuild docker-clean clean-all check-node-version
 
 # Default target
 help:
@@ -35,6 +35,8 @@ help:
 	@echo "  ${YELLOW}make prod${NC}         - Build and serve the application"
 	@echo "  ${YELLOW}make docker-build${NC} - Build Docker image"
 	@echo "  ${YELLOW}make docker-run${NC}   - Run the application in Docker"
+	@echo "  ${YELLOW}make docker-rebuild${NC} - Clean, rebuild, and run Docker container"
+	@echo "  ${YELLOW}make docker-clean${NC} - Remove Docker container"
 	@echo "  ${YELLOW}make clean-all${NC}    - Remove node_modules, build directory"
 	@echo ""
 	@echo "You can specify the port for the server using PORT=<port>:"
@@ -90,7 +92,15 @@ docker-build:
 # Run in Docker
 docker-run:
 	@echo "${CYAN}Running Docker container on port ${DOCKER_PORT}...${NC}"
-	docker run -p $(DOCKER_PORT):3001 --name $(DOCKER_IMAGE_NAME) $(DOCKER_IMAGE_NAME):$(DOCKER_TAG)
+	docker run -p $(DOCKER_PORT):3001 --name $(DOCKER_IMAGE_NAME) --rm $(DOCKER_IMAGE_NAME):$(DOCKER_TAG)
+
+# Quick rebuild and run Docker container
+docker-rebuild: docker-clean docker-build docker-run
+
+# Remove Docker container
+docker-clean:
+	@echo "${CYAN}Removing existing Docker container if it exists...${NC}"
+	docker rm -f $(DOCKER_IMAGE_NAME) 2>/dev/null || true
 
 # Clean up
 clean-all:
