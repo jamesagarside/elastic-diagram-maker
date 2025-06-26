@@ -12,6 +12,10 @@ import {
 } from "../assets/instance-configurations.js";
 // Import the default icon URL
 import { DEFAULT_ICON_URL } from "../assets/integration-icon-urls.js";
+// Import the ETL tools hook
+import { useEtlTools } from "../assets/etl-tools.js";
+// Import component styles
+import "./InputForm.css";
 import {
   EuiForm,
   EuiFormRow,
@@ -29,6 +33,9 @@ import {
   EuiComboBox,
   EuiLoadingSpinner,
   EuiHealth,
+  EuiBadge,
+  EuiButtonIcon,
+  EuiFieldText,
 } from "@elastic/eui";
 
 // Helper function to get node sizes - powers of 2 up to 64GB, then 64GB increments
@@ -69,6 +76,9 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     loading: isLoadingIntegrations,
     error: integrationsError,
   } = useIntegrations();
+
+  // Get ETL tools using our custom hook
+  const { tools: etlTools } = useEtlTools();
 
   // Fetch deployment templates dynamically using our custom hook
   const {
@@ -922,114 +932,385 @@ const InputForm = ({ architecture, updateArchitecture }) => {
         </EuiFormRow>
         {renderComponentConfig("logstash", "Logstash")}
 
-        {/* Elastic Agent */}
+        {/* Multiple Elastic Agents */}
         <EuiFormRow hasChildLabel={false}>
-          <EuiSwitch
-            label="Elastic Agent"
-            checked={architecture.components.elasticAgent.enabled}
-            onChange={() => handleComponentToggle("elasticAgent")}
-          />
-        </EuiFormRow>
-
-        {architecture.components.elasticAgent.enabled && (
-          <EuiAccordion
-            id="elasticAgent-integrations"
-            buttonContent="Data Integrations"
-            paddingSize="s"
-            initialIsOpen={true}
-          >
-            <EuiFormRow
-              label="Select data integrations"
-              helpText="Choose from available integrations from elastic.co"
-              fullWidth
-            >
-              <EuiComboBox
-                placeholder="Select one or more integrations"
-                isLoading={isLoadingIntegrations}
-                options={integrations.map((integration) => ({
-                  label: integration.label,
-                  value: integration.value,
-                  renderOption: () => (
-                    <EuiFlexGroup
-                      gutterSize="s"
-                      alignItems="center"
-                      responsive={false}
-                    >
-                      <EuiFlexItem grow={false}>
-                        <div
-                          dangerouslySetInnerHTML={{
-                            __html: integration.icon
-                              ? `<img src="${integration.icon}" alt="${integration.label}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
-                              : `<img src="${DEFAULT_ICON_URL}" alt="${integration.label}" class="integration-icon" width="16" height="16" />`,
-                          }}
-                        />
-                      </EuiFlexItem>
-                      <EuiFlexItem>{integration.label}</EuiFlexItem>
-                    </EuiFlexGroup>
-                  ),
-                }))}
-                selectedOptions={(
-                  architecture.components.elasticAgent.selectedIntegrations ||
-                  []
-                ).map((integration) => {
-                  const integrationObj = integrations.find(
-                    (i) => i.value === integration
-                  );
-                  return {
-                    label: integrationObj?.label || integration,
-                    value: integration,
-                    renderOption: () => (
-                      <EuiFlexGroup
-                        gutterSize="s"
-                        alignItems="center"
-                        responsive={false}
-                      >
-                        <EuiFlexItem grow={false}>
-                          <div
-                            dangerouslySetInnerHTML={{
-                              __html: integrationObj?.icon
-                                ? `<img src="${integrationObj.icon}" alt="${
-                                    integrationObj.label || integration
-                                  }" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
-                                : `<img src="${DEFAULT_ICON_URL}" alt="${
-                                    integrationObj?.label || integration
-                                  }" class="integration-icon" width="16" height="16" />`,
-                            }}
-                          />
-                        </EuiFlexItem>
-                        <EuiFlexItem>
-                          {integrationObj?.label || integration}
-                        </EuiFlexItem>
-                      </EuiFlexGroup>
-                    ),
+          <EuiFlexGroup alignItems="center" gutterSize="s">
+            <EuiFlexItem grow={false}>
+              <EuiTitle size="xs">
+                <h4>Elastic Agents</h4>
+              </EuiTitle>
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiButtonEmpty
+                size="xs"
+                iconType="plusInCircle"
+                onClick={() => {
+                  const newAgentId = `agent${
+                    architecture.components.elasticAgents.length + 1
+                  }`;
+                  const newAgent = {
+                    id: newAgentId,
+                    enabled: true,
+                    name: `Elastic Agent ${
+                      architecture.components.elasticAgents.length + 1
+                    }`,
+                    selectedIntegrations: [],
+                    selectedEtlTools: [],
+                    dataRouting: "direct",
                   };
-                })}
-                onChange={(selectedOptions) => {
-                  const selectedIntegrations = selectedOptions.map(
-                    (option) => option.value
-                  );
+
                   updateArchitecture({
                     ...architecture,
                     components: {
                       ...architecture.components,
-                      elasticAgent: {
-                        ...architecture.components.elasticAgent,
-                        selectedIntegrations: selectedIntegrations,
-                      },
+                      elasticAgents: [
+                        ...architecture.components.elasticAgents,
+                        newAgent,
+                      ],
                     },
                   });
                 }}
-                renderOption={(option, searchValue, contentClassName) => {
-                  return option.renderOption
-                    ? option.renderOption()
-                    : option.label;
-                }}
-                isClearable={true}
-                fullWidth
-              />
-            </EuiFormRow>
-          </EuiAccordion>
-        )}
+              >
+                Add Agent
+              </EuiButtonEmpty>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </EuiFormRow>
+
+        {/* Render each agent with its configuration */}
+        {architecture.components.elasticAgents.map((agent, index) => (
+          <div key={agent.id} className="agent-config-container">
+            <EuiHorizontalRule margin="xs" />
+
+            <EuiFlexGroup alignItems="center" gutterSize="s">
+              <EuiFlexItem grow={false}>
+                <EuiSwitch
+                  label="Enabled"
+                  checked={agent.enabled}
+                  onChange={() => {
+                    const updatedAgents = [
+                      ...architecture.components.elasticAgents,
+                    ];
+                    updatedAgents[index].enabled =
+                      !updatedAgents[index].enabled;
+
+                    updateArchitecture({
+                      ...architecture,
+                      components: {
+                        ...architecture.components,
+                        elasticAgents: updatedAgents,
+                      },
+                    });
+                  }}
+                />
+              </EuiFlexItem>
+
+              <EuiFlexItem>
+                <EuiFieldText
+                  placeholder="Agent Name"
+                  value={agent.name}
+                  onChange={(e) => {
+                    const updatedAgents = [
+                      ...architecture.components.elasticAgents,
+                    ];
+                    updatedAgents[index].name = e.target.value;
+
+                    updateArchitecture({
+                      ...architecture,
+                      components: {
+                        ...architecture.components,
+                        elasticAgents: updatedAgents,
+                      },
+                    });
+                  }}
+                  aria-label="Agent name"
+                />
+              </EuiFlexItem>
+              {index > 0 && (
+                <EuiFlexItem grow={false}>
+                  <EuiButtonIcon
+                    aria-label="Remove agent"
+                    iconType="cross"
+                    color="danger"
+                    onClick={() => {
+                      const updatedAgents =
+                        architecture.components.elasticAgents.filter(
+                          (_, i) => i !== index
+                        );
+
+                      updateArchitecture({
+                        ...architecture,
+                        components: {
+                          ...architecture.components,
+                          elasticAgents: updatedAgents,
+                        },
+                      });
+                    }}
+                  />
+                </EuiFlexItem>
+              )}
+            </EuiFlexGroup>
+
+            {agent.enabled && (
+              <>
+                <EuiAccordion
+                  id={`${agent.id}-data-routing`}
+                  buttonContent="Data Routing"
+                  paddingSize="s"
+                  initialIsOpen={true}
+                >
+                  <EuiFormRow
+                    label="Select how data should be routed"
+                    helpText="Choose the data path for this Elastic Agent"
+                  >
+                    <EuiSelect
+                      options={[
+                        { value: "direct", text: "Direct to Elasticsearch" },
+                        { value: "logstash", text: "Via Logstash" },
+                        { value: "etl", text: "Via ETL/Queuing Tool" },
+                      ]}
+                      value={agent.dataRouting || "direct"}
+                      onChange={(e) => {
+                        const updatedAgents = [
+                          ...architecture.components.elasticAgents,
+                        ];
+                        updatedAgents[index].dataRouting = e.target.value;
+
+                        updateArchitecture({
+                          ...architecture,
+                          components: {
+                            ...architecture.components,
+                            elasticAgents: updatedAgents,
+                          },
+                        });
+                      }}
+                    />
+                  </EuiFormRow>
+                </EuiAccordion>
+
+                {agent.dataRouting === "etl" && (
+                  <EuiAccordion
+                    id={`${agent.id}-etl-tools`}
+                    buttonContent="ETL & Queuing Tools"
+                    paddingSize="s"
+                    initialIsOpen={true}
+                  >
+                    <EuiFormRow
+                      label="Select ETL & queuing tools"
+                      helpText="Choose from common data ETL and queuing tools"
+                      fullWidth
+                    >
+                      <EuiComboBox
+                        placeholder="Select one or more ETL tools"
+                        options={etlTools.map((tool) => ({
+                          label: tool.name,
+                          value: tool.id,
+                          renderOption: () => (
+                            <EuiFlexGroup
+                              gutterSize="s"
+                              alignItems="center"
+                              responsive={false}
+                            >
+                              <EuiFlexItem grow={false}>
+                                <div
+                                  dangerouslySetInnerHTML={{
+                                    __html: tool.icon
+                                      ? `<img src="${tool.icon}" alt="${tool.name}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
+                                      : `<img src="${DEFAULT_ICON_URL}" alt="${tool.name}" class="integration-icon" width="16" height="16" />`,
+                                  }}
+                                />
+                              </EuiFlexItem>
+                              <EuiFlexItem>{tool.name}</EuiFlexItem>
+                              <EuiFlexItem grow={false}>
+                                <EuiBadge color="hollow">
+                                  {tool.category}
+                                </EuiBadge>
+                              </EuiFlexItem>
+                            </EuiFlexGroup>
+                          ),
+                        }))}
+                        selectedOptions={(agent.selectedEtlTools || []).map(
+                          (toolId) => {
+                            const toolObj = etlTools.find(
+                              (t) => t.id === toolId
+                            );
+                            return {
+                              label: toolObj?.name || toolId,
+                              value: toolId,
+                              renderOption: () => (
+                                <EuiFlexGroup
+                                  gutterSize="s"
+                                  alignItems="center"
+                                  responsive={false}
+                                >
+                                  <EuiFlexItem grow={false}>
+                                    <div
+                                      dangerouslySetInnerHTML={{
+                                        __html: toolObj?.icon
+                                          ? `<img src="${toolObj.icon}" alt="${
+                                              toolObj.name || toolId
+                                            }" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
+                                          : `<img src="${DEFAULT_ICON_URL}" alt="${
+                                              toolObj?.name || toolId
+                                            }" class="integration-icon" width="16" height="16" />`,
+                                      }}
+                                    />
+                                  </EuiFlexItem>
+                                  <EuiFlexItem>
+                                    {toolObj?.name || toolId}
+                                  </EuiFlexItem>
+                                  {toolObj?.category && (
+                                    <EuiFlexItem grow={false}>
+                                      <EuiBadge color="hollow">
+                                        {toolObj.category}
+                                      </EuiBadge>
+                                    </EuiFlexItem>
+                                  )}
+                                </EuiFlexGroup>
+                              ),
+                            };
+                          }
+                        )}
+                        onChange={(selectedOptions) => {
+                          const selectedTools = selectedOptions.map(
+                            (option) => option.value
+                          );
+
+                          const updatedAgents = [
+                            ...architecture.components.elasticAgents,
+                          ];
+                          updatedAgents[index].selectedEtlTools = selectedTools;
+
+                          updateArchitecture({
+                            ...architecture,
+                            components: {
+                              ...architecture.components,
+                              elasticAgents: updatedAgents,
+                            },
+                          });
+                        }}
+                        renderOption={(
+                          option,
+                          searchValue,
+                          contentClassName
+                        ) => {
+                          return option.renderOption
+                            ? option.renderOption()
+                            : option.label;
+                        }}
+                        isClearable={true}
+                        fullWidth
+                      />
+                    </EuiFormRow>
+                  </EuiAccordion>
+                )}
+
+                <EuiAccordion
+                  id={`${agent.id}-integrations`}
+                  buttonContent="Data Integrations"
+                  paddingSize="s"
+                  initialIsOpen={true}
+                >
+                  <EuiFormRow
+                    label="Select data integrations"
+                    helpText="Choose from available integrations from elastic.co"
+                    fullWidth
+                  >
+                    <EuiComboBox
+                      placeholder="Select one or more integrations"
+                      isLoading={isLoadingIntegrations}
+                      options={integrations.map((integration) => ({
+                        label: integration.label,
+                        value: integration.value,
+                        renderOption: () => (
+                          <EuiFlexGroup
+                            gutterSize="s"
+                            alignItems="center"
+                            responsive={false}
+                          >
+                            <EuiFlexItem grow={false}>
+                              <div
+                                dangerouslySetInnerHTML={{
+                                  __html: integration.icon
+                                    ? `<img src="${integration.icon}" alt="${integration.label}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
+                                    : `<img src="${DEFAULT_ICON_URL}" alt="${integration.label}" class="integration-icon" width="16" height="16" />`,
+                                }}
+                              />
+                            </EuiFlexItem>
+                            <EuiFlexItem>{integration.label}</EuiFlexItem>
+                          </EuiFlexGroup>
+                        ),
+                      }))}
+                      selectedOptions={(agent.selectedIntegrations || []).map(
+                        (integration) => {
+                          const integrationObj = integrations.find(
+                            (i) => i.value === integration
+                          );
+                          return {
+                            label: integrationObj?.label || integration,
+                            value: integration,
+                            renderOption: () => (
+                              <EuiFlexGroup
+                                gutterSize="s"
+                                alignItems="center"
+                                responsive={false}
+                              >
+                                <EuiFlexItem grow={false}>
+                                  <div
+                                    dangerouslySetInnerHTML={{
+                                      __html: integrationObj?.icon
+                                        ? `<img src="${
+                                            integrationObj.icon
+                                          }" alt="${
+                                            integrationObj.label || integration
+                                          }" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
+                                        : `<img src="${DEFAULT_ICON_URL}" alt="${
+                                            integrationObj?.label || integration
+                                          }" class="integration-icon" width="16" height="16" />`,
+                                    }}
+                                  />
+                                </EuiFlexItem>
+                                <EuiFlexItem>
+                                  {integrationObj?.label || integration}
+                                </EuiFlexItem>
+                              </EuiFlexGroup>
+                            ),
+                          };
+                        }
+                      )}
+                      onChange={(selectedOptions) => {
+                        const selectedIntegrations = selectedOptions.map(
+                          (option) => option.value
+                        );
+
+                        const updatedAgents = [
+                          ...architecture.components.elasticAgents,
+                        ];
+                        updatedAgents[index].selectedIntegrations =
+                          selectedIntegrations;
+
+                        updateArchitecture({
+                          ...architecture,
+                          components: {
+                            ...architecture.components,
+                            elasticAgents: updatedAgents,
+                          },
+                        });
+                      }}
+                      renderOption={(option, searchValue, contentClassName) => {
+                        return option.renderOption
+                          ? option.renderOption()
+                          : option.label;
+                      }}
+                      isClearable={true}
+                      fullWidth
+                    />
+                  </EuiFormRow>
+                </EuiAccordion>
+              </>
+            )}
+          </div>
+        ))}
 
         <EuiSpacer size="m" />
         <EuiHorizontalRule />

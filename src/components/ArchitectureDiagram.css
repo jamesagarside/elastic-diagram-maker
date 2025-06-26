@@ -83,6 +83,55 @@
   margin: 0;
 }
 
+/* ETL tool styling */
+.etl-tool-node {
+  border: 1px solid #e6edf7;
+  background-color: #f5f7fa;
+  position: relative;
+}
+
+.etl-tool-node .tool-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.etl-tool-node:hover .tool-actions {
+  opacity: 1;
+}
+
+.routing-info {
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+/* Data flow indicator for ETL to Agent */
+.data-flow-indicator {
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+/* Agent styling when positioned below ETL */
+.agent-below-etl {
+  margin-top: 10px;
+  border-top: 2px dashed #017d73;
+}
+
+/* Multi-agent styling */
+.agent-node {
+  position: relative;
+}
+
+.agent-config-container {
+  margin-bottom: 15px;
+  position: relative;
+}
+
 /* Fallback responsive styles (will be overridden by JavaScript) */
 @media (max-width: 768px) {
   .integration-item {

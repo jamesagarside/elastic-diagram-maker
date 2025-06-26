@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  Fragment,
+} from "react";
 import {
   EuiPanel,
   EuiTitle,
@@ -46,6 +52,7 @@ import integrationsServerIcon from "../img/icons/integrations-server-icon.png";
 
 import { useIntegrations } from "../assets/data-integrations.js";
 import { DEFAULT_ICON_URL } from "../assets/integration-icon-urls.js";
+import { useEtlTools } from "../assets/etl-tools.js";
 
 // Custom hook to calculate optimal number of columns
 const useDynamicColumnCount = (containerRef, itemMinWidth = 150) => {
@@ -417,16 +424,22 @@ const ArchitectureDiagram = ({
     return zones;
   };
 
+  // Get ETL tools data
+  const { tools: etlTools } = useEtlTools();
+
   const renderAgents = () => {
+    const hasEnabledAgents = architecture.components.elasticAgents?.some(
+      (agent) => agent.enabled
+    );
     const showDataCollection =
-      architecture.components.elasticAgent.enabled ||
-      architecture.components.logstash.enabled;
+      hasEnabledAgents || architecture.components.logstash.enabled;
 
     if (!showDataCollection) return null;
 
-    // Get the selected integrations
-    const selectedIntegrations =
-      architecture.components.elasticAgent.selectedIntegrations || [];
+    // Get enabled agents
+    const enabledAgents =
+      architecture.components.elasticAgents?.filter((agent) => agent.enabled) ||
+      [];
 
     return (
       <>
@@ -435,79 +448,164 @@ const ArchitectureDiagram = ({
           <h3>Data Collection</h3>
         </EuiTitle>
         <EuiSpacer size="s" />
-        <EuiFlexGroup>
-          {architecture.components.elasticAgent.enabled && (
-            <EuiFlexItem>
-              <div className="component-node">
-                <div className="component-icon">
-                  {/* Use the new agent icon image */}
-                  <img
-                    src={agentIcon}
-                    alt="Elastic Agent"
-                    className="component-image-icon"
-                  />
-                </div>
-                <div className="node-label">Elastic Agent</div>
-                {selectedIntegrations.length > 0 && (
-                  <div className="integrations-list" ref={integrationsListRef}>
-                    <EuiText size="xs" color="subdued">
-                      <p>
-                        <strong>
-                          Enabled Integrations ({selectedIntegrations.length}):
-                        </strong>
-                      </p>
-                      <ul className="integration-items">
-                        {isLoadingIntegrations ? (
-                          <li className="integration-item">
-                            <EuiLoadingSpinner size="m" /> Loading
-                            integrations...
-                          </li>
-                        ) : (
-                          <>
-                            {selectedIntegrations
-                              .slice(0, integrationsToShow)
-                              .map((integrationValue, index) => {
-                                // Find the integration in the list to get its label and icon
-                                const integrationObj = integrations.find(
-                                  (i) => i.value === integrationValue
-                                );
-                                const integrationLabel =
-                                  integrationObj?.label || integrationValue;
+        <EuiFlexGroup wrap>
+          {/* Render each enabled agent's ETL tools and agent node */}
+          {enabledAgents.map((agent, agentIndex) => {
+            // Get agent's data routing configuration
+            const dataRouting = agent.dataRouting || "direct";
+            // Get agent's selected ETL tools
+            const selectedEtlTools = agent.selectedEtlTools || [];
+            // Get agent's selected integrations
+            const selectedIntegrations = agent.selectedIntegrations || [];
 
-                                return (
-                                  <li key={index} className="integration-item">
-                                    <span
-                                      className="integration-icon"
-                                      dangerouslySetInnerHTML={{
-                                        __html: integrationObj?.icon
-                                          ? `<img src="${integrationObj.icon}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
-                                          : `<img src="${DEFAULT_ICON_URL}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" />`,
-                                      }}
-                                    ></span>
-                                    <span title={integrationLabel}>
-                                      {integrationLabel}
-                                    </span>
-                                  </li>
-                                );
-                              })}
-                            {selectedIntegrations.length >
-                              integrationsToShow && (
-                              <li className="integration-more">
-                                +
-                                {selectedIntegrations.length -
-                                  integrationsToShow}{" "}
-                                more
+            return (
+              <Fragment key={agent.id}>
+                {/* Render ETL tools for this agent when routing via ETL is enabled */}
+                {dataRouting === "etl" &&
+                  selectedEtlTools.map((toolId) => {
+                    const etlTool = etlTools.find((t) => t.id === toolId);
+                    if (!etlTool) return null;
+
+                    return (
+                      <EuiFlexItem key={`${agent.id}-etl-${toolId}`}>
+                        <div className="component-node etl-tool-node">
+                          <div className="component-icon">
+                            {/* Use the ETL tool icon */}
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: etlTool.icon
+                                  ? `<img src="${etlTool.icon}" alt="${etlTool.name}" class="component-image-icon" onerror="this.src='${DEFAULT_ICON_URL}';" />`
+                                  : `<img src="${DEFAULT_ICON_URL}" alt="${etlTool.name}" class="component-image-icon" />`,
+                              }}
+                            />
+                          </div>
+                          <div className="node-label">{etlTool.name}</div>
+                          <div className="tool-actions">
+                            <EuiButtonIcon
+                              aria-label={`Remove ${etlTool.name}`}
+                              iconType="cross"
+                              color="danger"
+                              size="s"
+                              onClick={() => {
+                                // Filter out this tool from the selected tools for this agent
+                                const updatedAgents = [
+                                  ...architecture.components.elasticAgents,
+                                ];
+                                updatedAgents[agentIndex].selectedEtlTools =
+                                  updatedAgents[
+                                    agentIndex
+                                  ].selectedEtlTools.filter(
+                                    (id) => id !== toolId
+                                  );
+
+                                updateArchitecture({
+                                  ...architecture,
+                                  components: {
+                                    ...architecture.components,
+                                    elasticAgents: updatedAgents,
+                                  },
+                                });
+                              }}
+                            />
+                          </div>
+                          <div className="data-flow-indicator">
+                            <EuiIcon type="arrowDown" color="primary" />
+                          </div>
+                        </div>
+                      </EuiFlexItem>
+                    );
+                  })}
+
+                {/* Render the agent node */}
+                <EuiFlexItem>
+                  <div
+                    className={`component-node agent-node ${
+                      dataRouting === "etl" ? "agent-below-etl" : ""
+                    }`}
+                  >
+                    <div className="component-icon">
+                      <img
+                        src={agentIcon}
+                        alt={agent.name}
+                        className="component-image-icon"
+                      />
+                    </div>
+                    <div className="node-label">{agent.name}</div>
+                    {dataRouting !== "direct" && (
+                      <div className="routing-info">
+                        <EuiBadge color="primary">
+                          {dataRouting === "logstash"
+                            ? "Via Logstash"
+                            : "Via ETL Tools"}
+                        </EuiBadge>
+                      </div>
+                    )}
+                    {selectedIntegrations.length > 0 && (
+                      <div className="integrations-list">
+                        <EuiText size="xs" color="subdued">
+                          <p>
+                            <strong>
+                              Enabled Integrations (
+                              {selectedIntegrations.length}):
+                            </strong>
+                          </p>
+                          <ul className="integration-items">
+                            {isLoadingIntegrations ? (
+                              <li className="integration-item">
+                                <EuiLoadingSpinner size="m" /> Loading
+                                integrations...
                               </li>
+                            ) : (
+                              <>
+                                {selectedIntegrations
+                                  .slice(0, integrationsToShow)
+                                  .map((integrationValue, index) => {
+                                    // Find the integration in the list to get its label and icon
+                                    const integrationObj = integrations.find(
+                                      (i) => i.value === integrationValue
+                                    );
+                                    const integrationLabel =
+                                      integrationObj?.label || integrationValue;
+
+                                    return (
+                                      <li
+                                        key={index}
+                                        className="integration-item"
+                                      >
+                                        <span
+                                          className="integration-icon"
+                                          dangerouslySetInnerHTML={{
+                                            __html: integrationObj?.icon
+                                              ? `<img src="${integrationObj.icon}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
+                                              : `<img src="${DEFAULT_ICON_URL}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" />`,
+                                          }}
+                                        ></span>
+                                        <span title={integrationLabel}>
+                                          {integrationLabel}
+                                        </span>
+                                      </li>
+                                    );
+                                  })}
+                                {selectedIntegrations.length >
+                                  integrationsToShow && (
+                                  <li className="integration-more">
+                                    +
+                                    {selectedIntegrations.length -
+                                      integrationsToShow}{" "}
+                                    more
+                                  </li>
+                                )}
+                              </>
                             )}
-                          </>
-                        )}
-                      </ul>
-                    </EuiText>
+                          </ul>
+                        </EuiText>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </EuiFlexItem>
-          )}
+                </EuiFlexItem>
+              </Fragment>
+            );
+          })}
 
           {/* Logstash in Data Collection Tier */}
           {architecture.components.logstash.enabled && (

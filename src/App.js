@@ -111,10 +111,17 @@ function App() {
         storageMultiplier: 2.0,
         cpuMultiplier: 0.13,
       },
-      elasticAgent: {
-        enabled: false,
-        selectedIntegrations: [],
-      },
+      elasticAgents: [
+        // Array of agent configurations
+        {
+          id: "agent1",
+          enabled: false,
+          name: "Elastic Agent 1",
+          selectedIntegrations: [],
+          selectedEtlTools: [],
+          dataRouting: "direct", // Can be: "direct", "logstash", or "etl"
+        },
+      ],
     },
   });
 
