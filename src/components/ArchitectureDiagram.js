@@ -552,11 +552,12 @@ const ArchitectureDiagram = ({
                   <div className="router-header">
                     <div className="component-node etl-tool-node">
                       <div className="component-icon">
-                        <div
-                          dangerouslySetInnerHTML={{
-                            __html: etlTool.icon
-                              ? `<img src="${etlTool.icon}" alt="${etlTool.name}" class="component-image-icon" onerror="this.src='${DEFAULT_ICON_URL}';" />`
-                              : `<img src="${DEFAULT_ICON_URL}" alt="${etlTool.name}" class="component-image-icon" />`,
+                        <img
+                          src={etlTool.icon || DEFAULT_ICON_URL}
+                          alt={etlTool.name}
+                          className="component-image-icon"
+                          onError={(e) => {
+                            e.target.src = DEFAULT_ICON_URL;
                           }}
                         />
                       </div>
@@ -702,31 +703,36 @@ const ArchitectureDiagram = ({
                 </strong>
               </p>
             </EuiText>
-            <div className="integration-icons">
-              {selectedIntegrations.slice(0, 4).map((integrationId) => {
+            <div className="integration-items">
+              {selectedIntegrations.slice(0, 10).map((integrationId) => {
                 // Find the integration in the list to get its label and icon
                 const integrationObj = integrations.find(
                   (i) => i.value === integrationId
                 );
                 const integrationLabel = integrationObj?.label || integrationId;
+                const iconUrl = integrationObj?.icon || DEFAULT_ICON_URL;
 
                 return (
-                  <span
-                    key={integrationId}
-                    className="integration-icon"
-                    title={integrationLabel}
-                    dangerouslySetInnerHTML={{
-                      __html: integrationObj?.icon
-                        ? `<img src="${integrationObj.icon}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
-                        : `<img src="${DEFAULT_ICON_URL}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" />`,
-                    }}
-                  ></span>
+                  <div key={integrationId} className="integration-item">
+                    <span className="integration-icon">
+                      <img
+                        src={iconUrl}
+                        alt={integrationLabel}
+                        width="20"
+                        height="20"
+                        onError={(e) => {
+                          e.target.src = DEFAULT_ICON_URL;
+                        }}
+                      />
+                    </span>
+                    <span className="integration-name">{integrationLabel}</span>
+                  </div>
                 );
               })}
-              {selectedIntegrations.length > 4 && (
-                <span className="integration-more">
-                  +{selectedIntegrations.length - 4} more
-                </span>
+              {selectedIntegrations.length > 10 && (
+                <div className="integration-more">
+                  +{selectedIntegrations.length - 10} more integrations
+                </div>
               )}
             </div>
           </div>
