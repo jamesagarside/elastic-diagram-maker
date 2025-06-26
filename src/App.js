@@ -104,13 +104,23 @@ function App() {
         storageMultiplier: 2.0,
         cpuMultiplier: 0.13,
       },
-      logstash: {
-        enabled: false,
-        azCount: 1,
-        nodeSize: 8,
-        storageMultiplier: 2.0,
-        cpuMultiplier: 0.13,
-      },
+      logstashInstances: [
+        // Array of Logstash instances
+        {
+          id: "logstash1",
+          enabled: false,
+          name: "Logstash 1",
+        },
+      ],
+      etlQueueTools: [
+        // Array of ETL and Queuing tool configurations
+        {
+          id: "etl1",
+          enabled: false,
+          name: "ETL Tool 1",
+          toolType: "", // Will store the selected ETL tool ID
+        },
+      ],
       elasticAgents: [
         // Array of agent configurations
         {
@@ -119,7 +129,7 @@ function App() {
           name: "Elastic Agent 1",
           selectedIntegrations: [],
           selectedEtlTools: [],
-          dataRouting: "direct", // Can be: "direct", "logstash", or "etl"
+          dataRouting: "direct", // Can be: "direct", "logstash:{id}", or "etl:{id}"
         },
       ],
     },

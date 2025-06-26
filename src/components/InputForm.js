@@ -99,6 +99,7 @@ const InputForm = ({ architecture, updateArchitecture }) => {
   // Fetch region-specific deployment templates and instance configurations
   const {
     nodeSizes: dynamicNodeSizes,
+    instanceConfigurations,
     loading: isLoadingInstanceConfig,
     error: instanceConfigError,
   } = useRegionDeploymentTemplates(selectedRegion, selectedHardwareProfile);
@@ -400,11 +401,13 @@ const InputForm = ({ architecture, updateArchitecture }) => {
           azCount: 1,
           nodeSize: 2,
         },
-        logstash: {
-          enabled: false,
-          azCount: 1,
-          nodeSize: 2,
-        },
+        logstashInstances: [
+          {
+            id: "logstash1",
+            enabled: false,
+            name: "Logstash 1",
+          },
+        ],
         elasticAgent: {
           enabled: false,
           selectedIntegrations: [],
@@ -421,8 +424,14 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     Object.keys(architecture.components).forEach((componentName) => {
       const component = architecture.components[componentName];
 
-      // Skip elastic agent as it doesn't have node sizes
-      if (componentName === "elasticAgent") return;
+      // Skip components that don't have node sizes
+      if (
+        componentName === "elasticAgent" ||
+        componentName === "etlQueueTools" ||
+        componentName === "logstashInstances" ||
+        componentName === "elasticAgents"
+      )
+        return;
 
       // Handle Elasticsearch tiers specially
       if (componentName === "elasticsearch" && component.enabled) {
@@ -435,7 +444,10 @@ const InputForm = ({ architecture, updateArchitecture }) => {
       }
       // Handle other components
       else if (component.enabled) {
-        totalSize += component.azCount * component.nodeSize;
+        // Only calculate if component has azCount and nodeSize properties
+        if (component.azCount && component.nodeSize) {
+          totalSize += component.azCount * component.nodeSize;
+        }
       }
     });
 
@@ -922,23 +934,373 @@ const InputForm = ({ architecture, updateArchitecture }) => {
         </EuiTitle>
         <EuiSpacer size="s" />
 
-        {/* Logstash */}
-        <EuiFormRow hasChildLabel={false}>
-          <EuiSwitch
-            label="Logstash"
-            checked={architecture.components.logstash.enabled}
-            onChange={() => handleComponentToggle("logstash")}
-          />
+        {/* Logstash Instances */}
+        <EuiFormRow
+          label="Logstash Instances"
+          helpText="Create and manage your Logstash instances"
+        >
+          <EuiFlexGroup alignItems="center" gutterSize="s">
+            <EuiFlexItem grow={true}>
+              {/* Empty flex item to push button to the right */}
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiButtonEmpty
+                size="xs"
+                iconType="plusInCircle"
+                onClick={() => {
+                  const newLogstashId = `logstash${
+                    architecture.components.logstashInstances.length + 1
+                  }`;
+                  const newLogstash = {
+                    id: newLogstashId,
+                    enabled: true,
+                    name: `Logstash ${
+                      architecture.components.logstashInstances.length + 1
+                    }`,
+                  };
+
+                  updateArchitecture({
+                    ...architecture,
+                    components: {
+                      ...architecture.components,
+                      logstashInstances: [
+                        ...architecture.components.logstashInstances,
+                        newLogstash,
+                      ],
+                    },
+                  });
+                }}
+              >
+                Add Logstash Instance
+              </EuiButtonEmpty>
+            </EuiFlexItem>
+          </EuiFlexGroup>
         </EuiFormRow>
-        {renderComponentConfig("logstash", "Logstash")}
+
+        {/* Render each Logstash instance with its configuration */}
+        {architecture.components.logstashInstances.map(
+          (logstashInstance, index) => (
+            <div
+              key={logstashInstance.id}
+              className={`logstash-instance-config-container ${
+                !logstashInstance.enabled ? "disabled" : ""
+              }`}
+            >
+              <EuiFlexGroup alignItems="center" gutterSize="s">
+                <EuiFlexItem grow={false}>
+                  <EuiSwitch
+                    label="Enabled"
+                    checked={logstashInstance.enabled}
+                    onChange={() => {
+                      const updatedInstances = [
+                        ...architecture.components.logstashInstances,
+                      ];
+                      updatedInstances[index].enabled =
+                        !updatedInstances[index].enabled;
+
+                      updateArchitecture({
+                        ...architecture,
+                        components: {
+                          ...architecture.components,
+                          logstashInstances: updatedInstances,
+                        },
+                      });
+                    }}
+                  />
+                </EuiFlexItem>
+                <EuiFlexItem>
+                  <EuiFieldText
+                    value={logstashInstance.name}
+                    onChange={(e) => {
+                      const updatedInstances = [
+                        ...architecture.components.logstashInstances,
+                      ];
+                      updatedInstances[index].name = e.target.value;
+
+                      updateArchitecture({
+                        ...architecture,
+                        components: {
+                          ...architecture.components,
+                          logstashInstances: updatedInstances,
+                        },
+                      });
+                    }}
+                    disabled={!logstashInstance.enabled}
+                  />
+                </EuiFlexItem>
+                {index > 0 && (
+                  <EuiFlexItem grow={false}>
+                    <EuiButtonIcon
+                      iconType="cross"
+                      color="danger"
+                      onClick={() => {
+                        // Remove this Logstash instance
+                        const updatedInstances =
+                          architecture.components.logstashInstances.filter(
+                            (_, i) => i !== index
+                          );
+
+                        // Update any agent routing that was using this Logstash instance
+                        const updatedAgents =
+                          architecture.components.elasticAgents.map((agent) => {
+                            if (
+                              agent.dataRouting ===
+                              `logstash:${logstashInstance.id}`
+                            ) {
+                              return { ...agent, dataRouting: "direct" };
+                            }
+                            return agent;
+                          });
+
+                        updateArchitecture({
+                          ...architecture,
+                          components: {
+                            ...architecture.components,
+                            logstashInstances: updatedInstances,
+                            elasticAgents: updatedAgents,
+                          },
+                        });
+                      }}
+                      aria-label={`Remove ${logstashInstance.name}`}
+                    />
+                  </EuiFlexItem>
+                )}
+              </EuiFlexGroup>
+            </div>
+          )
+        )}
+
+        {/* ETL & Queuing Tools */}
+        <EuiFormRow
+          label="ETL & Queuing Tools"
+          helpText="Create and manage ETL and Queue processing tools"
+        >
+          <EuiFlexGroup alignItems="center" gutterSize="s">
+            <EuiFlexItem grow={true}>
+              {/* Empty flex item to push button to the right */}
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiButtonEmpty
+                size="xs"
+                iconType="plusInCircle"
+                onClick={() => {
+                  const newToolId = `etl${
+                    architecture.components.etlQueueTools.length + 1
+                  }`;
+                  const newTool = {
+                    id: newToolId,
+                    enabled: true,
+                    name: `ETL Tool ${
+                      architecture.components.etlQueueTools.length + 1
+                    }`,
+                    toolType: "",
+                  };
+
+                  updateArchitecture({
+                    ...architecture,
+                    components: {
+                      ...architecture.components,
+                      etlQueueTools: [
+                        ...architecture.components.etlQueueTools,
+                        newTool,
+                      ],
+                    },
+                  });
+                }}
+              >
+                Add ETL/Queue Tool
+              </EuiButtonEmpty>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </EuiFormRow>
+
+        {/* Render each ETL/Queue tool with its configuration */}
+        {architecture.components.etlQueueTools.map((tool, index) => (
+          <div
+            key={tool.id}
+            className={`etl-tool-config-container ${
+              !tool.enabled ? "disabled" : ""
+            }`}
+          >
+            <EuiHorizontalRule margin="xs" />
+
+            <EuiFlexGroup alignItems="center" gutterSize="s">
+              <EuiFlexItem grow={false}>
+                <EuiSwitch
+                  label="Enabled"
+                  checked={tool.enabled}
+                  onChange={() => {
+                    const updatedTools = [
+                      ...architecture.components.etlQueueTools,
+                    ];
+                    updatedTools[index].enabled = !updatedTools[index].enabled;
+
+                    updateArchitecture({
+                      ...architecture,
+                      components: {
+                        ...architecture.components,
+                        etlQueueTools: updatedTools,
+                      },
+                    });
+                  }}
+                />
+              </EuiFlexItem>
+
+              <EuiFlexItem>
+                <EuiFieldText
+                  placeholder="Tool Name"
+                  value={tool.name}
+                  onChange={(e) => {
+                    const updatedTools = [
+                      ...architecture.components.etlQueueTools,
+                    ];
+                    updatedTools[index].name = e.target.value;
+
+                    updateArchitecture({
+                      ...architecture,
+                      components: {
+                        ...architecture.components,
+                        etlQueueTools: updatedTools,
+                      },
+                    });
+                  }}
+                  aria-label="Tool name"
+                />
+              </EuiFlexItem>
+
+              {index > 0 && (
+                <EuiFlexItem grow={false}>
+                  <EuiButtonIcon
+                    aria-label="Remove tool"
+                    iconType="cross"
+                    color="danger"
+                    onClick={() => {
+                      const updatedTools =
+                        architecture.components.etlQueueTools.filter(
+                          (_, i) => i !== index
+                        );
+
+                      updateArchitecture({
+                        ...architecture,
+                        components: {
+                          ...architecture.components,
+                          etlQueueTools: updatedTools,
+                        },
+                      });
+                    }}
+                  />
+                </EuiFlexItem>
+              )}
+            </EuiFlexGroup>
+
+            {tool.enabled && (
+              <EuiFormRow
+                label="Select ETL/Queuing Tool Type"
+                helpText="Choose the type of ETL or queuing tool"
+                fullWidth
+              >
+                <EuiComboBox
+                  placeholder="Select an ETL or queuing tool"
+                  singleSelection={{ asPlainText: true }}
+                  options={etlTools.map((etlTool) => ({
+                    label: etlTool.name,
+                    value: etlTool.id,
+                    renderOption: () => (
+                      <EuiFlexGroup
+                        gutterSize="s"
+                        alignItems="center"
+                        responsive={false}
+                      >
+                        <EuiFlexItem grow={false}>
+                          <div
+                            dangerouslySetInnerHTML={{
+                              __html: etlTool.icon
+                                ? `<img src="${etlTool.icon}" alt="${etlTool.name}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
+                                : `<img src="${DEFAULT_ICON_URL}" alt="${etlTool.name}" class="integration-icon" width="16" height="16" />`,
+                            }}
+                          />
+                        </EuiFlexItem>
+                        <EuiFlexItem>{etlTool.name}</EuiFlexItem>
+                        <EuiFlexItem grow={false}>
+                          <EuiBadge color="hollow">{etlTool.category}</EuiBadge>
+                        </EuiFlexItem>
+                      </EuiFlexGroup>
+                    ),
+                  }))}
+                  selectedOptions={(() => {
+                    if (!tool.toolType) return [];
+                    const etlTool = etlTools.find(
+                      (t) => t.id === tool.toolType
+                    );
+                    if (!etlTool) return [];
+                    return [
+                      {
+                        label: etlTool.name,
+                        value: etlTool.id,
+                        renderOption: () => (
+                          <EuiFlexGroup
+                            gutterSize="s"
+                            alignItems="center"
+                            responsive={false}
+                          >
+                            <EuiFlexItem grow={false}>
+                              <div
+                                dangerouslySetInnerHTML={{
+                                  __html: etlTool.icon
+                                    ? `<img src="${etlTool.icon}" alt="${etlTool.name}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
+                                    : `<img src="${DEFAULT_ICON_URL}" alt="${etlTool.name}" class="integration-icon" width="16" height="16" />`,
+                                }}
+                              />
+                            </EuiFlexItem>
+                            <EuiFlexItem>{etlTool.name}</EuiFlexItem>
+                            <EuiFlexItem grow={false}>
+                              <EuiBadge color="hollow">
+                                {etlTool.category}
+                              </EuiBadge>
+                            </EuiFlexItem>
+                          </EuiFlexGroup>
+                        ),
+                      },
+                    ];
+                  })()}
+                  onChange={(selectedOptions) => {
+                    const updatedTools = [
+                      ...architecture.components.etlQueueTools,
+                    ];
+                    updatedTools[index].toolType =
+                      selectedOptions.length > 0
+                        ? selectedOptions[0].value
+                        : "";
+
+                    updateArchitecture({
+                      ...architecture,
+                      components: {
+                        ...architecture.components,
+                        etlQueueTools: updatedTools,
+                      },
+                    });
+                  }}
+                  renderOption={(option, searchValue, contentClassName) => {
+                    return option.renderOption
+                      ? option.renderOption()
+                      : option.label;
+                  }}
+                  isClearable={true}
+                  fullWidth
+                />
+              </EuiFormRow>
+            )}
+          </div>
+        ))}
 
         {/* Multiple Elastic Agents */}
-        <EuiFormRow hasChildLabel={false}>
+        <EuiFormRow
+          label="Elastic Agents"
+          helpText="Create and manage your Elastic Agents for data collection"
+        >
           <EuiFlexGroup alignItems="center" gutterSize="s">
-            <EuiFlexItem grow={false}>
-              <EuiTitle size="xs">
-                <h4>Elastic Agents</h4>
-              </EuiTitle>
+            <EuiFlexItem grow={true}>
+              {/* Empty flex item to push button to the right */}
             </EuiFlexItem>
             <EuiFlexItem grow={false}>
               <EuiButtonEmpty
@@ -979,7 +1341,12 @@ const InputForm = ({ architecture, updateArchitecture }) => {
 
         {/* Render each agent with its configuration */}
         {architecture.components.elasticAgents.map((agent, index) => (
-          <div key={agent.id} className="agent-config-container">
+          <div
+            key={agent.id}
+            className={`agent-config-container ${
+              !agent.enabled ? "disabled" : ""
+            }`}
+          >
             <EuiHorizontalRule margin="xs" />
 
             <EuiFlexGroup alignItems="center" gutterSize="s">
@@ -1066,8 +1433,18 @@ const InputForm = ({ architecture, updateArchitecture }) => {
                     <EuiSelect
                       options={[
                         { value: "direct", text: "Direct to Elasticsearch" },
-                        { value: "logstash", text: "Via Logstash" },
-                        { value: "etl", text: "Via ETL/Queuing Tool" },
+                        ...architecture.components.logstashInstances
+                          .filter((instance) => instance.enabled)
+                          .map((instance) => ({
+                            value: `logstash:${instance.id}`,
+                            text: `Via ${instance.name}`,
+                          })),
+                        ...architecture.components.etlQueueTools
+                          .filter((tool) => tool.enabled && tool.toolType)
+                          .map((tool) => ({
+                            value: `etl:${tool.id}`,
+                            text: `Via ${tool.name}`,
+                          })),
                       ]}
                       value={agent.dataRouting || "direct"}
                       onChange={(e) => {
@@ -1075,6 +1452,11 @@ const InputForm = ({ architecture, updateArchitecture }) => {
                           ...architecture.components.elasticAgents,
                         ];
                         updatedAgents[index].dataRouting = e.target.value;
+
+                        // If user selected an ETL tool, clear any previously selected ETL tools from the agent
+                        if (e.target.value.startsWith("etl:")) {
+                          updatedAgents[index].selectedEtlTools = [];
+                        }
 
                         updateArchitecture({
                           ...architecture,
@@ -1087,123 +1469,6 @@ const InputForm = ({ architecture, updateArchitecture }) => {
                     />
                   </EuiFormRow>
                 </EuiAccordion>
-
-                {agent.dataRouting === "etl" && (
-                  <EuiAccordion
-                    id={`${agent.id}-etl-tools`}
-                    buttonContent="ETL & Queuing Tools"
-                    paddingSize="s"
-                    initialIsOpen={true}
-                  >
-                    <EuiFormRow
-                      label="Select ETL & queuing tools"
-                      helpText="Choose from common data ETL and queuing tools"
-                      fullWidth
-                    >
-                      <EuiComboBox
-                        placeholder="Select one or more ETL tools"
-                        options={etlTools.map((tool) => ({
-                          label: tool.name,
-                          value: tool.id,
-                          renderOption: () => (
-                            <EuiFlexGroup
-                              gutterSize="s"
-                              alignItems="center"
-                              responsive={false}
-                            >
-                              <EuiFlexItem grow={false}>
-                                <div
-                                  dangerouslySetInnerHTML={{
-                                    __html: tool.icon
-                                      ? `<img src="${tool.icon}" alt="${tool.name}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
-                                      : `<img src="${DEFAULT_ICON_URL}" alt="${tool.name}" class="integration-icon" width="16" height="16" />`,
-                                  }}
-                                />
-                              </EuiFlexItem>
-                              <EuiFlexItem>{tool.name}</EuiFlexItem>
-                              <EuiFlexItem grow={false}>
-                                <EuiBadge color="hollow">
-                                  {tool.category}
-                                </EuiBadge>
-                              </EuiFlexItem>
-                            </EuiFlexGroup>
-                          ),
-                        }))}
-                        selectedOptions={(agent.selectedEtlTools || []).map(
-                          (toolId) => {
-                            const toolObj = etlTools.find(
-                              (t) => t.id === toolId
-                            );
-                            return {
-                              label: toolObj?.name || toolId,
-                              value: toolId,
-                              renderOption: () => (
-                                <EuiFlexGroup
-                                  gutterSize="s"
-                                  alignItems="center"
-                                  responsive={false}
-                                >
-                                  <EuiFlexItem grow={false}>
-                                    <div
-                                      dangerouslySetInnerHTML={{
-                                        __html: toolObj?.icon
-                                          ? `<img src="${toolObj.icon}" alt="${
-                                              toolObj.name || toolId
-                                            }" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
-                                          : `<img src="${DEFAULT_ICON_URL}" alt="${
-                                              toolObj?.name || toolId
-                                            }" class="integration-icon" width="16" height="16" />`,
-                                      }}
-                                    />
-                                  </EuiFlexItem>
-                                  <EuiFlexItem>
-                                    {toolObj?.name || toolId}
-                                  </EuiFlexItem>
-                                  {toolObj?.category && (
-                                    <EuiFlexItem grow={false}>
-                                      <EuiBadge color="hollow">
-                                        {toolObj.category}
-                                      </EuiBadge>
-                                    </EuiFlexItem>
-                                  )}
-                                </EuiFlexGroup>
-                              ),
-                            };
-                          }
-                        )}
-                        onChange={(selectedOptions) => {
-                          const selectedTools = selectedOptions.map(
-                            (option) => option.value
-                          );
-
-                          const updatedAgents = [
-                            ...architecture.components.elasticAgents,
-                          ];
-                          updatedAgents[index].selectedEtlTools = selectedTools;
-
-                          updateArchitecture({
-                            ...architecture,
-                            components: {
-                              ...architecture.components,
-                              elasticAgents: updatedAgents,
-                            },
-                          });
-                        }}
-                        renderOption={(
-                          option,
-                          searchValue,
-                          contentClassName
-                        ) => {
-                          return option.renderOption
-                            ? option.renderOption()
-                            : option.label;
-                        }}
-                        isClearable={true}
-                        fullWidth
-                      />
-                    </EuiFormRow>
-                  </EuiAccordion>
-                )}
 
                 <EuiAccordion
                   id={`${agent.id}-integrations`}
@@ -1787,4 +2052,18 @@ const InputForm = ({ architecture, updateArchitecture }) => {
   );
 };
 
-export default InputForm;
+// Export the InputForm component along with instance configurations
+const InputFormWithConfigs = (props) => {
+  const { architecture, updateArchitecture } = props;
+  const { instanceConfigurations } = useRegionDeploymentTemplates(
+    architecture.environment?.region,
+    architecture.environment?.hardwareProfile
+  );
+
+  // Add instance configurations to the component props
+  return (
+    <InputForm {...props} instanceConfigurations={instanceConfigurations} />
+  );
+};
+
+export default InputFormWithConfigs;

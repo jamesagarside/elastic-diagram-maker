@@ -12,3 +12,74 @@
 .agent-config-container:hover {
   background-color: #eef4f7;
 }
+
+/* Disabled Agent styling */
+.agent-config-container.disabled {
+  opacity: 0.6;
+  border-left-color: #ccc;
+  background-color: #f5f5f5;
+}
+
+.agent-config-container.disabled:hover {
+  background-color: #eee;
+}
+
+/* ETL tool configuration styling */
+.etl-tool-config-container {
+  padding: 10px;
+  margin-bottom: 15px;
+  position: relative;
+  border-left: 3px solid #0077cc;
+  padding-left: 15px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+.etl-tool-config-container:hover {
+  background-color: #eef0f7;
+}
+
+/* Disabled ETL Tool styling */
+.etl-tool-config-container.disabled {
+  opacity: 0.6;
+  border-left-color: #ccc;
+  background-color: #f5f5f5;
+}
+
+.etl-tool-config-container.disabled:hover {
+  background-color: #eee;
+}
+
+/* Logstash instance configuration styling */
+.logstash-instance-config-container {
+  padding: 10px;
+  margin-bottom: 15px;
+  position: relative;
+  border-left: 3px solid #f04e98;
+  padding-left: 15px;
+  background-color: #fdf5f9;
+  border-radius: 4px;
+}
+
+.logstash-instance-config-container:hover {
+  background-color: #fcecf5;
+}
+
+/* Disabled Logstash instance styling */
+.logstash-instance-config-container.disabled {
+  opacity: 0.6;
+  border-left-color: #ccc;
+  background-color: #f5f5f5;
+}
+
+.logstash-instance-config-container.disabled:hover {
+  background-color: #eee;
+}
+
+/* ETL tool node styling */
+.component-node.etl-tool-node .node-type {
+  font-size: 11px;
+  margin-top: 5px;
+  display: flex;
+  justify-content: center;
+}

@@ -58,11 +58,27 @@
   justify-content: center;
   align-items: center;
   margin-bottom: 8px;
+  height: 40px;
 }
 
 .component-image-icon {
   width: 32px;
   height: 32px;
+  object-fit: contain;
+}
+
+/* Make data collection icons consistent */
+.data-collection-container .component-icon {
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.data-collection-container .component-image-icon {
+  width: 30px;
+  height: 30px;
   object-fit: contain;
 }
 
@@ -73,6 +89,8 @@
   justify-content: center;
   gap: 8px;
   margin-top: 4px;
+  /* Set to column layout to stack items vertically when needed */
+  flex-direction: row;
 }
 
 .resource-item {
@@ -81,12 +99,38 @@
   padding: 0 3px;
   white-space: nowrap;
   margin: 0;
+  flex: 0 1 auto; /* Allow items to shrink but not grow */
+}
+
+/* Instance configuration ID styling */
+.resource-instance-id-container {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  text-align: center;
+  order: 999; /* Ensure it always appears at the end */
+  flex-basis: 100%; /* Force it to take full width */
+  padding-top: 2px;
+}
+
+.resource-instance-id {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 10px;
+  color: #017D73; /* Elastic teal color for the instance ID */
+  background-color: #F0F8F7;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 95%;
+  text-align: center; /* Centers the text */
+  border: 1px solid rgba(1, 125, 115, 0.2);
 }
 
 /* ETL tool styling */
 .etl-tool-node {
-  border: 1px solid #e6edf7;
-  background-color: #f5f7fa;
   position: relative;
 }
 
@@ -110,16 +154,62 @@
 /* Data flow indicator for ETL to Agent */
 .data-flow-indicator {
   position: absolute;
-  bottom: -15px;
+  bottom: -12px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
+  background-color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure data flow indicator is positioned consistently */
+.data-collection-container .component-node .data-flow-indicator {
+  bottom: -12px; /* Consistent positioning for all data collection nodes */
 }
 
 /* Agent styling when positioned below ETL */
-.agent-below-etl {
+.agent-below-etl, .agent-below-router {
   margin-top: 10px;
   border-top: 2px dashed #017d73;
+}
+
+/* Agent group styling */
+.agent-group {
+  margin-top: 20px;
+  position: relative;
+  border-radius: 4px;
+  background-color: rgba(1, 125, 115, 0.05);
+  padding: 15px 10px;
+  /* For horizontal layout of agents */
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 15px;
+}
+
+/* Direct agent group styling */
+.direct-agent-group {
+  border: 1px dashed rgba(0, 0, 0, 0.1);
+  background-color: #f7f8fc;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.direct-agents-header {
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Logstash node styling */
+.logstash-node {
+  position: relative;
 }
 
 /* Multi-agent styling */
@@ -127,9 +217,258 @@
   position: relative;
 }
 
-.agent-config-container {
-  margin-bottom: 15px;
+.agent-below-router {
+  transition: transform 0.2s ease;
+}
+
+.agent-below-router:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Routing group styling */
+.routing-group {
+  width: 100%;
+  margin-bottom: 20px;
   position: relative;
+  border: 1px dashed rgba(1, 125, 115, 0.2);
+  border-radius: 6px;
+  padding: 15px;
+  box-sizing: border-box;
+  /* Change from inherited display:flex to column */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Enhanced visual separation between routing groups */
+.vertical-stack-container > .routing-group + .routing-group {
+  margin-top: 30px;
+  position: relative;
+}
+
+/* Add divider between routing groups */
+.vertical-stack-container > .routing-group + .routing-group::before {
+  content: '';
+  position: absolute;
+  top: -15px;
+  left: 5%;
+  right: 5%;
+  height: 1px;
+  background: #eaeaea;
+}
+
+/* Add title for routing groups */
+.routing-group::before {
+  content: attr(data-title);
+  position: absolute;
+  top: -10px;
+  left: 20px;
+  background: white;
+  padding: 0 10px;
+  font-size: 12px;
+  color: #69707D;
+  display: none; /* Hidden by default, can be enabled if needed */
+}
+
+/* Vertical stacking container for routing groups */
+.vertical-stack-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Router header - helps position the ETL or Logstash node */
+.router-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 25px;
+  position: relative;
+  width: 100%;
+}
+
+/* Ensure router header nodes have consistent width */
+.router-header .component-node {
+  width: 100%;
+}
+
+/* Base node styling across routing types */
+.component-node {
+  background-color: #fff;
+  border-radius: 4px;
+  padding: 12px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+/* Data collection container - main wrapper for routing columns */
+.data-collection-container {
+  width: 100%;
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: rgba(0, 0, 0, 0.01);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Container for all routing tool columns */
+.routing-columns {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: center;
+  align-items: flex-start;
+  margin: 0 -10px;
+  width: calc(100% + 20px);
+}
+
+/* Individual routing column (ETL/Queue or Logstash) */
+.routing-column {
+  display: flex;
+  flex-direction: column;
+  border: 1px dashed rgba(1, 125, 115, 0.2);
+  border-radius: 6px;
+  padding: 15px;
+  min-width: 250px;
+  flex: 1;
+  max-width: 300px; /* Consistent max width for all columns */
+  width: calc((100% - 40px) / 3); /* Each column takes equal width with gap considered */
+  margin-bottom: 10px;
+  background-color: rgba(1, 125, 115, 0.02);
+  position: relative;
+  box-sizing: border-box;
+}
+
+/* Direct agent column styling */
+.direct-agent-column {
+  border: 1px dashed rgba(0, 0, 0, 0.1);
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.direct-agent-column .router-header {
+  border-radius: 4px;
+  padding: 10px 0;
+}
+
+/* Direct agent column will use the unified component node styling */
+
+/* Vertical stacking of agents within a column */
+.agent-column {
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+  gap: 15px;
+  max-height: 500px; /* Limit height for many agents */
+  overflow-y: auto; /* Allow vertical scrolling if many agents */
+  padding: 5px;
+  border-top: 2px dashed rgba(1, 125, 115, 0.2);
+  width: 100%; /* Ensure it takes full width of parent column */
+}
+
+/* Agent node styling in column layout */
+.agent-column .agent-node {
+  width: 100%; /* Make sure agent nodes take full width of the column */
+  margin: 0 0 10px 0;
+  flex: 0 0 auto;
+  transition: transform 0.2s ease;
+  box-sizing: border-box; /* Include padding and border in width calculation */
+}
+
+/* Agent hover styling is now handled in the unified data collection classes */
+
+/* Router header in column layout */
+.routing-column .router-header {
+  align-self: center;
+}
+
+/* Enhanced data flow indicator for column layout */
+.routing-column .data-flow-indicator {
+  bottom: -20px;
+}
+
+/* Data flow connector line */
+.router-header {
+  position: relative;
+}
+
+.router-header::after {
+  content: '';
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  height: 15px;
+  width: 2px;
+  background-color: #017d73;
+  z-index: 1;
+  transform: translateX(-50%);
+  display: none;
+}
+
+.routing-column .router-header:has(+ .agent-column)::after {
+  display: block;
+}
+
+/* Column-specific styling overrides */
+.routing-column .component-node {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Better column visualization */
+.routing-column:not(:last-child) {
+  position: relative;
+}
+
+.routing-column:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -11px;
+  width: 1px;
+  background-color: rgba(0, 0, 0, 0.1);
+  z-index: 2;
+}
+
+/* Ensure integration lists don't overflow */
+.agent-column .integrations-list {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Responsive adjustments for column layout */
+@media (max-width: 992px) {
+  .routing-columns {
+    gap: 15px;
+  }
+  
+  .routing-column {
+    min-width: 180px;
+    width: 45%;
+  }
+}
+
+@media (max-width: 768px) {
+  .routing-columns {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .routing-column {
+    max-width: none;
+    width: 100%;
+  }
+  
+  /* Remove column separators on mobile */
+  .routing-column:not(:last-child)::after {
+    display: none;
+  }
+  
+  /* Add more space between columns in vertical layout */
+  .routing-column + .routing-column {
+    margin-top: 20px;
+  }
 }
 
 /* Fallback responsive styles (will be overridden by JavaScript) */
@@ -137,10 +476,122 @@
   .integration-item {
     width: calc(50% - 16px);
   }
+
+  .agent-node {
+    flex: 0 0 calc(50% - 10px);
+  }
 }
 
 @media (max-width: 480px) {
   .integration-item {
     width: 100%;
   }
+
+  .agent-node {
+    flex: 0 0 100%;
+  }
+}
+
+/* Data collection nodes unified styling */
+.data-collection-container .component-node {
+  width: 100%;
+  min-height: 140px;
+  height: 140px; /* Fixed height for all nodes */
+  background-color: #fff;
+  border: 1px solid #e6edf7;
+  border-radius: 4px;
+  padding: 15px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin-bottom: 0; /* Remove bottom margin to ensure consistent spacing */
+}
+
+/* Agent nodes in data collection - ensure consistent size with parent nodes */
+.data-collection-container .agent-node {
+  min-height: 140px;
+  height: 140px; /* Same fixed height as routing nodes */
+  padding: 15px;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  flex: 1;
+  transition: transform 0.2s ease;
+  box-sizing: border-box; /* Include padding and border in width calculation */
+}
+
+/* Consistent node property styling */
+.data-collection-container .node-type,
+.data-collection-container .node-size,
+.data-collection-container .routing-info {
+  margin: 5px 0;
+  text-align: center;
+}
+
+/* Badge styling consistency */
+.data-collection-container .euiBadge {
+  display: inline-block;
+  margin: 2px;
+}
+
+/* Common left border style for data collection nodes */
+.data-collection-container .etl-tool-node {
+  border-left: 3px solid #017d73;
+}
+
+.data-collection-container .logstash-node {
+  border-left: 3px solid #f04e98;
+}
+
+.data-collection-container .elasticsearch-node {
+  border-left: 3px solid #0077CC;
+}
+
+/* Add left border to agent nodes based on routing */
+.data-collection-container .etl-routed {
+  border-left: 3px solid #017d73;
+}
+
+.data-collection-container .logstash-routed {
+  border-left: 3px solid #f04e98;
+}
+
+.data-collection-container .elasticsearch-routed {
+  border-left: 3px solid #0077CC;
+}
+
+.direct-agent-column .component-node {
+  border-left: 3px solid #0077CC;
+}
+
+/* Consistent node label styling */
+.data-collection-container .node-label {
+  font-weight: 600;
+  font-size: 14px;
+  margin: 5px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Agent nodes in data collection */
+.data-collection-container .agent-node {
+  min-height: 100px;
+  padding: 12px;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  flex: 1;
+  transition: transform 0.2s ease;
+}
+
+.data-collection-container .agent-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }

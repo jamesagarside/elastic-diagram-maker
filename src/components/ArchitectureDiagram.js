@@ -115,6 +115,7 @@ const ComponentNode = ({
   storageMultiplier,
   cpuMultiplier,
   showResourceInfo,
+  instanceConfigId,
 }) => {
   // Calculate storage size and CPU count if needed
   const storageSize = showResourceInfo
@@ -161,6 +162,18 @@ const ComponentNode = ({
           </>
         )}
       </div>
+
+      {/* Instance configuration ID container - always outside the resources container */}
+      {instanceConfigId && (
+        <div className="resource-instance-id-container">
+          <span
+            className="resource-instance-id"
+            title="Instance Configuration ID"
+          >
+            {instanceConfigId}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
@@ -273,6 +286,31 @@ const ArchitectureDiagram = ({
       component.storageMultiplier !== undefined &&
       component.cpuMultiplier !== undefined;
 
+    // Determine instance configuration ID based on node type, cloud provider, and region
+    let instanceConfigId = null;
+
+    // Get cloud provider and region from architecture state
+    const provider = architecture.environment.cloudProvider || "aws";
+    const region = architecture.environment.region || "us-east-1";
+
+    // Format instance configuration ID based on Elasticsearch's naming convention
+    if (isElasticsearchNode) {
+      if (tier) {
+        // For hot, warm, cold, frozen tiers
+        const tierKey = componentName.toLowerCase();
+        instanceConfigId = `${provider}.${region}.elasticsearch.${tierKey}`;
+      } else if (componentName === "mlNodes") {
+        // For ML nodes
+        instanceConfigId = `${provider}.${region}.elasticsearch.ml`;
+      }
+    } else if (componentName === "kibana") {
+      instanceConfigId = `${provider}.${region}.kibana`;
+    } else if (componentName === "enterpriseSearch") {
+      instanceConfigId = `${provider}.${region}.enterprise_search`;
+    } else if (componentName === "integrationsServer") {
+      instanceConfigId = `${provider}.${region}.integrations_server`;
+    }
+
     return nodeSizes.map((nodeSize, index) => (
       <EuiFlexItem key={`${componentName}-${index}-az${azIndex}`}>
         <ComponentNode
@@ -284,6 +322,7 @@ const ArchitectureDiagram = ({
           storageMultiplier={component.storageMultiplier}
           cpuMultiplier={component.cpuMultiplier}
           showResourceInfo={showResourceInfo}
+          instanceConfigId={instanceConfigId}
         />
         {nodeSizes.length > 1 && (
           <div className="node-index">
@@ -431,8 +470,14 @@ const ArchitectureDiagram = ({
     const hasEnabledAgents = architecture.components.elasticAgents?.some(
       (agent) => agent.enabled
     );
+    const hasEnabledEtlTools = architecture.components.etlQueueTools?.some(
+      (tool) => tool.enabled && tool.toolType
+    );
+    const hasEnabledLogstash = architecture.components.logstashInstances?.some(
+      (instance) => instance.enabled
+    );
     const showDataCollection =
-      hasEnabledAgents || architecture.components.logstash.enabled;
+      hasEnabledAgents || hasEnabledLogstash || hasEnabledEtlTools;
 
     if (!showDataCollection) return null;
 
@@ -441,6 +486,38 @@ const ArchitectureDiagram = ({
       architecture.components.elasticAgents?.filter((agent) => agent.enabled) ||
       [];
 
+    // Group agents by routing
+    const directAgents = enabledAgents.filter(
+      (agent) => agent.dataRouting === "direct"
+    );
+
+    // Group agents by Logstash instance
+    const logstashInstancesWithAgents =
+      architecture.components.logstashInstances
+        .filter((instance) => instance.enabled)
+        .map((instance) => ({
+          instance,
+          agents: enabledAgents.filter(
+            (agent) => agent.dataRouting === `logstash:${instance.id}`
+          ),
+        }));
+
+    // Group ETL tools and their connected agents
+    const etlToolsWithAgents = architecture.components.etlQueueTools
+      .filter((tool) => tool.enabled && tool.toolType)
+      .map((tool) => ({
+        tool,
+        agents: enabledAgents.filter(
+          (agent) => agent.dataRouting === `etl:${tool.id}`
+        ),
+      }));
+
+    // Count the number of columns to adjust spacing
+    const totalColumns =
+      etlToolsWithAgents.length +
+      logstashInstancesWithAgents.length +
+      (directAgents.length > 0 ? 1 : 0);
+
     return (
       <>
         <EuiHorizontalRule margin="m" />
@@ -448,189 +525,213 @@ const ArchitectureDiagram = ({
           <h3>Data Collection</h3>
         </EuiTitle>
         <EuiSpacer size="s" />
-        <EuiFlexGroup wrap>
-          {/* Render each enabled agent's ETL tools and agent node */}
-          {enabledAgents.map((agent, agentIndex) => {
-            // Get agent's data routing configuration
-            const dataRouting = agent.dataRouting || "direct";
-            // Get agent's selected ETL tools
-            const selectedEtlTools = agent.selectedEtlTools || [];
-            // Get agent's selected integrations
-            const selectedIntegrations = agent.selectedIntegrations || [];
 
-            return (
-              <Fragment key={agent.id}>
-                {/* Render ETL tools for this agent when routing via ETL is enabled */}
-                {dataRouting === "etl" &&
-                  selectedEtlTools.map((toolId) => {
-                    const etlTool = etlTools.find((t) => t.id === toolId);
-                    if (!etlTool) return null;
+        <div
+          className="data-collection-container"
+          style={{
+            "--total-columns": totalColumns,
+          }}
+        >
+          <EuiText size="xs" color="subdued">
+            <p>
+              Each column below represents a data routing path with its agents
+            </p>
+          </EuiText>
+          <EuiSpacer size="s" />
 
-                    return (
-                      <EuiFlexItem key={`${agent.id}-etl-${toolId}`}>
-                        <div className="component-node etl-tool-node">
-                          <div className="component-icon">
-                            {/* Use the ETL tool icon */}
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html: etlTool.icon
-                                  ? `<img src="${etlTool.icon}" alt="${etlTool.name}" class="component-image-icon" onerror="this.src='${DEFAULT_ICON_URL}';" />`
-                                  : `<img src="${DEFAULT_ICON_URL}" alt="${etlTool.name}" class="component-image-icon" />`,
-                              }}
-                            />
-                          </div>
-                          <div className="node-label">{etlTool.name}</div>
-                          <div className="tool-actions">
-                            <EuiButtonIcon
-                              aria-label={`Remove ${etlTool.name}`}
-                              iconType="cross"
-                              color="danger"
-                              size="s"
-                              onClick={() => {
-                                // Filter out this tool from the selected tools for this agent
-                                const updatedAgents = [
-                                  ...architecture.components.elasticAgents,
-                                ];
-                                updatedAgents[agentIndex].selectedEtlTools =
-                                  updatedAgents[
-                                    agentIndex
-                                  ].selectedEtlTools.filter(
-                                    (id) => id !== toolId
-                                  );
+          {/* ETL tools and Logstash columns */}
+          <div className="routing-columns">
+            {/* Render ETL tool columns with their connected agents */}
+            {etlToolsWithAgents.map(({ tool, agents }) => {
+              const etlTool = etlTools.find((t) => t.id === tool.toolType);
+              if (!etlTool) return null;
 
-                                updateArchitecture({
-                                  ...architecture,
-                                  components: {
-                                    ...architecture.components,
-                                    elasticAgents: updatedAgents,
-                                  },
-                                });
-                              }}
-                            />
-                          </div>
-                          <div className="data-flow-indicator">
-                            <EuiIcon type="arrowDown" color="primary" />
-                          </div>
+              return (
+                <div key={`etl-column-${tool.id}`} className="routing-column">
+                  {/* ETL Tool Header */}
+                  <div className="router-header">
+                    <div className="component-node etl-tool-node">
+                      <div className="component-icon">
+                        <div
+                          dangerouslySetInnerHTML={{
+                            __html: etlTool.icon
+                              ? `<img src="${etlTool.icon}" alt="${etlTool.name}" class="component-image-icon" onerror="this.src='${DEFAULT_ICON_URL}';" />`
+                              : `<img src="${DEFAULT_ICON_URL}" alt="${etlTool.name}" class="component-image-icon" />`,
+                          }}
+                        />
+                      </div>
+                      <div className="node-label">{tool.name}</div>
+                      <div className="node-type">
+                        <EuiBadge color="hollow">{etlTool.name}</EuiBadge>
+                      </div>
+                      {agents.length > 0 && (
+                        <div className="data-flow-indicator">
+                          <EuiIcon type="arrowDown" color="primary" />
                         </div>
-                      </EuiFlexItem>
-                    );
-                  })}
+                      )}
+                    </div>
+                  </div>
 
-                {/* Render the agent node */}
-                <EuiFlexItem>
-                  <div
-                    className={`component-node agent-node ${
-                      dataRouting === "etl" ? "agent-below-etl" : ""
-                    }`}
-                  >
+                  {/* Agents stacked vertically below the ETL Tool */}
+                  {agents.length > 0 && (
+                    <div className="agent-column">
+                      {agents.map((agent) => renderAgentNode(agent, true))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Logstash instances columns with their connected agents */}
+            {logstashInstancesWithAgents.map(({ instance, agents }) => (
+              <div
+                key={`logstash-column-${instance.id}`}
+                className="routing-column"
+              >
+                {/* Logstash Instance Header */}
+                <div className="router-header">
+                  <div className="component-node logstash-node">
                     <div className="component-icon">
                       <img
-                        src={agentIcon}
-                        alt={agent.name}
+                        src={logstashIcon}
+                        alt={instance.name}
                         className="component-image-icon"
                       />
                     </div>
-                    <div className="node-label">{agent.name}</div>
-                    {dataRouting !== "direct" && (
-                      <div className="routing-info">
-                        <EuiBadge color="primary">
-                          {dataRouting === "logstash"
-                            ? "Via Logstash"
-                            : "Via ETL Tools"}
-                        </EuiBadge>
-                      </div>
-                    )}
-                    {selectedIntegrations.length > 0 && (
-                      <div className="integrations-list">
-                        <EuiText size="xs" color="subdued">
-                          <p>
-                            <strong>
-                              Enabled Integrations (
-                              {selectedIntegrations.length}):
-                            </strong>
-                          </p>
-                          <ul className="integration-items">
-                            {isLoadingIntegrations ? (
-                              <li className="integration-item">
-                                <EuiLoadingSpinner size="m" /> Loading
-                                integrations...
-                              </li>
-                            ) : (
-                              <>
-                                {selectedIntegrations
-                                  .slice(0, integrationsToShow)
-                                  .map((integrationValue, index) => {
-                                    // Find the integration in the list to get its label and icon
-                                    const integrationObj = integrations.find(
-                                      (i) => i.value === integrationValue
-                                    );
-                                    const integrationLabel =
-                                      integrationObj?.label || integrationValue;
-
-                                    return (
-                                      <li
-                                        key={index}
-                                        className="integration-item"
-                                      >
-                                        <span
-                                          className="integration-icon"
-                                          dangerouslySetInnerHTML={{
-                                            __html: integrationObj?.icon
-                                              ? `<img src="${integrationObj.icon}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
-                                              : `<img src="${DEFAULT_ICON_URL}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" />`,
-                                          }}
-                                        ></span>
-                                        <span title={integrationLabel}>
-                                          {integrationLabel}
-                                        </span>
-                                      </li>
-                                    );
-                                  })}
-                                {selectedIntegrations.length >
-                                  integrationsToShow && (
-                                  <li className="integration-more">
-                                    +
-                                    {selectedIntegrations.length -
-                                      integrationsToShow}{" "}
-                                    more
-                                  </li>
-                                )}
-                              </>
-                            )}
-                          </ul>
-                        </EuiText>
+                    <div className="node-label">{instance.name}</div>
+                    {agents.length > 0 && (
+                      <div className="data-flow-indicator">
+                        <EuiIcon type="arrowDown" color="primary" />
                       </div>
                     )}
                   </div>
-                </EuiFlexItem>
-              </Fragment>
-            );
-          })}
-
-          {/* Logstash in Data Collection Tier */}
-          {architecture.components.logstash.enabled && (
-            <EuiFlexItem>
-              <div className="component-node">
-                <div className="component-icon">
-                  {/* Use the new logstash icon image */}
-                  <img
-                    src={logstashIcon}
-                    alt="Logstash"
-                    className="component-image-icon"
-                  />
                 </div>
-                <div className="node-label">Logstash</div>
-                {/* Display node size if configured */}
-                {architecture.components.logstash.nodeSize && (
-                  <div className="node-size">
-                    {architecture.components.logstash.nodeSize}GB
+
+                {/* Agents stacked vertically below Logstash instance */}
+                {agents.length > 0 && (
+                  <div className="agent-column">
+                    {agents.map((agent) => renderAgentNode(agent, true))}
                   </div>
                 )}
               </div>
-            </EuiFlexItem>
-          )}
-        </EuiFlexGroup>
+            ))}
+
+            {/* Direct agents column */}
+            {directAgents.length > 0 && (
+              <div className="routing-column direct-agent-column">
+                {/* Direct to Elasticsearch Header */}
+                <div className="router-header">
+                  <div className="component-node elasticsearch-node">
+                    <div className="component-icon">
+                      <img
+                        src={elasticsearchIcon}
+                        alt="Elasticsearch"
+                        className="component-image-icon"
+                      />
+                    </div>
+                    <div className="node-label">Direct to Elasticsearch</div>
+                    <div className="data-flow-indicator">
+                      <EuiIcon type="arrowDown" color="primary" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Direct agents stacked vertically */}
+                <div className="agent-column">
+                  {directAgents.map((agent) => renderAgentNode(agent, false))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </>
+    );
+  };
+
+  // Helper function to render an agent node
+  const renderAgentNode = (agent, isUnderRouter) => {
+    const selectedIntegrations = agent.selectedIntegrations || [];
+    const dataRouting = agent.dataRouting || "direct"; // Determine the routing type and class for styling
+    let routingType;
+    let routingClass;
+
+    if (dataRouting.startsWith("logstash:")) {
+      const logstashId = dataRouting.split(":")[1];
+      const logstashInstance = architecture.components.logstashInstances.find(
+        (instance) => instance.id === logstashId
+      );
+      routingType = `Via ${logstashInstance?.name || "Logstash"}`;
+      routingClass = "logstash-routed";
+    } else if (dataRouting.startsWith("etl:")) {
+      const etlTool = architecture.components.etlQueueTools.find(
+        (tool) => `etl:${tool.id}` === dataRouting
+      );
+      routingType = `Via ${etlTool?.name || "ETL Tool"}`;
+      routingClass = "etl-routed";
+    } else {
+      routingType = "Direct to Elasticsearch";
+      routingClass = "elasticsearch-routed";
+    }
+
+    return (
+      <div
+        key={agent.id}
+        className={`component-node agent-node ${routingClass} ${
+          isUnderRouter ? "agent-below-router" : ""
+        }`}
+      >
+        <div className="component-icon">
+          <img
+            src={agentIcon}
+            alt={agent.name}
+            className="component-image-icon"
+          />
+        </div>
+        <div className="node-label">{agent.name}</div>
+        <div className="routing-info">
+          <EuiBadge color={isUnderRouter ? "primary" : "default"}>
+            {routingType}
+          </EuiBadge>
+        </div>
+        {selectedIntegrations.length > 0 && (
+          <div className="integrations-list">
+            <EuiText size="xs" color="subdued">
+              <p>
+                <strong>
+                  Enabled Integrations ({selectedIntegrations.length}):
+                </strong>
+              </p>
+            </EuiText>
+            <div className="integration-icons">
+              {selectedIntegrations.slice(0, 4).map((integrationId) => {
+                // Find the integration in the list to get its label and icon
+                const integrationObj = integrations.find(
+                  (i) => i.value === integrationId
+                );
+                const integrationLabel = integrationObj?.label || integrationId;
+
+                return (
+                  <span
+                    key={integrationId}
+                    className="integration-icon"
+                    title={integrationLabel}
+                    dangerouslySetInnerHTML={{
+                      __html: integrationObj?.icon
+                        ? `<img src="${integrationObj.icon}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" onerror="this.src='${DEFAULT_ICON_URL}';" />`
+                        : `<img src="${DEFAULT_ICON_URL}" alt="${integrationLabel}" class="integration-icon" width="16" height="16" />`,
+                    }}
+                  ></span>
+                );
+              })}
+              {selectedIntegrations.length > 4 && (
+                <span className="integration-more">
+                  +{selectedIntegrations.length - 4} more
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     );
   };
 
