@@ -138,7 +138,16 @@ export const useRegionDeploymentTemplates = (regionId, hardwareProfileId) => {
                 componentType = "elasticsearch.frozen";
               } else if (nodeId === "ml") {
                 componentType = "mlNodes";
+              } else if (nodeId === "master") {
+                componentType = "elasticsearch.master";
+              } else if (nodeId === "coordinating") {
+                componentType = "elasticsearch.coordinating";
               }
+
+              // Log the mapping for debugging
+              console.log(
+                `Mapping nodeId ${nodeId} to componentType ${componentType}, configId: ${configId}`
+              );
 
               if (
                 componentType &&

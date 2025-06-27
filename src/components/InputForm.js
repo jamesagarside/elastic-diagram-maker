@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 // Import the dynamic integrations fetching hook
 import { useIntegrations } from "../assets/data-integrations.js";
 // Import the deployment templates hook
@@ -88,13 +88,135 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     hardwareProfiles,
     cloudProviders,
     regions,
-    selectedHardwareProfile,
+    selectedHardwareProfile: defaultSelectedHardwareProfile,
     selectedCloudProvider,
     selectedRegion,
     setSelectedHardwareProfile,
     setSelectedCloudProvider,
     setSelectedRegion,
   } = useDeploymentTemplates();
+
+  // Add state variables for selected hardware profile, cloud provider, and region
+  // Use the default values from useDeploymentTemplates as initial values
+  const [selectedHardwareProfile, setLocalSelectedHardwareProfile] = useState(
+    defaultSelectedHardwareProfile || ""
+  );
+  const [localSelectedCloudProvider, setLocalSelectedCloudProvider] = useState(
+    selectedCloudProvider || ""
+  );
+  const [localSelectedRegion, setLocalSelectedRegion] = useState(
+    selectedRegion || ""
+  );
+
+  // Create wrapper functions to update both our local state and the external state from the useDeploymentTemplates hook
+  const updateHardwareProfile = useCallback(
+    (profile) => {
+      setLocalSelectedHardwareProfile(profile);
+      setSelectedHardwareProfile(profile);
+    },
+    [setSelectedHardwareProfile]
+  );
+
+  const updateCloudProvider = useCallback(
+    (provider) => {
+      setLocalSelectedCloudProvider(provider);
+      setSelectedCloudProvider(provider);
+    },
+    [setSelectedCloudProvider]
+  );
+
+  const updateRegion = useCallback(
+    (region) => {
+      setLocalSelectedRegion(region);
+      setSelectedRegion(region);
+    },
+    [setSelectedRegion]
+  );
+
+  // Try to retrieve stored selections from sessionStorage
+  useEffect(() => {
+    try {
+      // Restore hardware profile
+      const storedProfile = sessionStorage.getItem("selectedHardwareProfile");
+      if (
+        storedProfile &&
+        hardwareProfiles.some((p) => p.value === storedProfile)
+      ) {
+        console.log(
+          `Restoring hardware profile from sessionStorage: ${storedProfile}`
+        );
+        updateHardwareProfile(storedProfile);
+
+        // Update architecture if needed
+        if (architecture.environment?.hardwareProfile !== storedProfile) {
+          updateArchitecture({
+            ...architecture,
+            environment: {
+              ...architecture.environment,
+              hardwareProfile: storedProfile,
+            },
+          });
+        }
+      } else if (defaultSelectedHardwareProfile) {
+        updateHardwareProfile(defaultSelectedHardwareProfile);
+      }
+
+      // Restore cloud provider
+      const storedCloudProvider = sessionStorage.getItem(
+        "selectedCloudProvider"
+      );
+      if (
+        storedCloudProvider &&
+        cloudProviders.some((p) => p.value === storedCloudProvider)
+      ) {
+        console.log(
+          `Restoring cloud provider from sessionStorage: ${storedCloudProvider}`
+        );
+        updateCloudProvider(storedCloudProvider);
+
+        // Update architecture if needed
+        if (architecture.environment?.cloudProvider !== storedCloudProvider) {
+          updateArchitecture({
+            ...architecture,
+            environment: {
+              ...architecture.environment,
+              cloudProvider: storedCloudProvider,
+            },
+          });
+        }
+      }
+
+      // Restore region
+      const storedRegion = sessionStorage.getItem("selectedRegion");
+      if (storedRegion && regions.some((r) => r.value === storedRegion)) {
+        console.log(`Restoring region from sessionStorage: ${storedRegion}`);
+        updateRegion(storedRegion);
+
+        // Update architecture if needed
+        if (architecture.environment?.region !== storedRegion) {
+          updateArchitecture({
+            ...architecture,
+            environment: {
+              ...architecture.environment,
+              region: storedRegion,
+            },
+          });
+        }
+      }
+    } catch (error) {
+      console.warn("Error retrieving selections from sessionStorage:", error);
+    }
+  }, [
+    hardwareProfiles,
+    cloudProviders,
+    regions,
+    defaultSelectedHardwareProfile,
+    updateArchitecture,
+    architecture,
+    updateHardwareProfile,
+    updateCloudProvider,
+    updateRegion,
+  ]);
 
   // Fetch region-specific deployment templates and instance configurations
   const {
@@ -105,90 +227,121 @@ const InputForm = ({ architecture, updateArchitecture }) => {
   } = useRegionDeploymentTemplates(selectedRegion, selectedHardwareProfile);
 
   // Initialize environment dropdown values from architecture state
+  // Avoid resetting hardware profile when it's manually changed
+  const initializedRef = useRef(false);
+
   useEffect(() => {
-    // If the architecture state has environment configuration, use those values
-    if (architecture.environment) {
-      // Special handling for hardware profile
-      if (
-        architecture.environment.hardwareProfile &&
-        hardwareProfiles.length > 0
-      ) {
-        // Check if the stored hardwareProfile exists in available profiles
-        const profileExists = hardwareProfiles.some(
-          (profile) =>
-            profile.value === architecture.environment.hardwareProfile
-        );
+    // Only proceed if there are hardware profiles and we haven't initialized yet
+    // or if the architecture state has a hardware profile that doesn't match our local state
+    if (
+      hardwareProfiles.length > 0 &&
+      architecture.environment &&
+      (!initializedRef.current ||
+        (architecture.environment.hardwareProfile &&
+          architecture.environment.hardwareProfile !==
+            selectedHardwareProfile &&
+          hardwareProfiles.some(
+            (p) => p.value === architecture.environment.hardwareProfile
+          )))
+    ) {
+      // Check if the stored profile exists
+      const profileExists = hardwareProfiles.some(
+        (profile) => profile.value === architecture.environment.hardwareProfile
+      );
 
-        if (profileExists) {
-          if (
-            selectedHardwareProfile !== architecture.environment.hardwareProfile
-          ) {
-            setSelectedHardwareProfile(
-              architecture.environment.hardwareProfile
-            );
-          }
-        } else if (hardwareProfiles.length > 0) {
-          // If stored profile doesn't exist, update architecture with first available profile
-          updateArchitecture({
-            ...architecture,
-            environment: {
-              ...architecture.environment,
-              hardwareProfile: hardwareProfiles[0].value,
-            },
-          });
+      if (profileExists) {
+        // Set the dropdown to match architecture state
+        if (
+          selectedHardwareProfile !== architecture.environment.hardwareProfile
+        ) {
+          console.log(
+            `Setting hardware profile to ${architecture.environment.hardwareProfile}`
+          );
+          updateHardwareProfile(architecture.environment.hardwareProfile);
         }
+      } else if (!initializedRef.current) {
+        // Use first available profile - but only during initialization
+        console.log(
+          `Setting hardware profile to first available: ${hardwareProfiles[0].value}`
+        );
+        updateArchitecture({
+          ...architecture,
+          environment: {
+            ...architecture.environment,
+            hardwareProfile: hardwareProfiles[0].value,
+          },
+        });
       }
 
-      // Special handling for cloud provider
-      if (architecture.environment.cloudProvider && cloudProviders.length > 0) {
-        // Check if the stored cloudProvider exists in available providers
-        const providerExists = cloudProviders.some(
-          (provider) =>
-            provider.value === architecture.environment.cloudProvider
-        );
+      // Mark as initialized so we don't reset manually changed profiles
+      initializedRef.current = true;
+    }
 
-        if (providerExists) {
-          if (
-            selectedCloudProvider !== architecture.environment.cloudProvider
-          ) {
-            setSelectedCloudProvider(architecture.environment.cloudProvider);
-          }
-        } else if (cloudProviders.length > 0) {
-          // If stored provider doesn't exist, update architecture with first available provider
-          updateArchitecture({
-            ...architecture,
-            environment: {
-              ...architecture.environment,
-              cloudProvider: cloudProviders[0].value,
-            },
-          });
+    // Special handling for cloud provider
+    if (
+      cloudProviders.length > 0 &&
+      architecture.environment &&
+      (!initializedRef.current ||
+        (architecture.environment.cloudProvider &&
+          architecture.environment.cloudProvider !==
+            localSelectedCloudProvider &&
+          cloudProviders.some(
+            (p) => p.value === architecture.environment.cloudProvider
+          )))
+    ) {
+      // Check if the stored provider exists
+      const providerExists = cloudProviders.some(
+        (provider) => provider.value === architecture.environment.cloudProvider
+      );
+
+      if (providerExists) {
+        // Set the dropdown to match architecture state
+        if (
+          localSelectedCloudProvider !== architecture.environment.cloudProvider
+        ) {
+          console.log(
+            `Setting cloud provider to ${architecture.environment.cloudProvider}`
+          );
+          updateCloudProvider(architecture.environment.cloudProvider);
         }
+      } else if (!initializedRef.current) {
+        // Use first available provider - but only during initialization
+        console.log(
+          `Setting cloud provider to first available: ${cloudProviders[0].value}`
+        );
+        updateArchitecture({
+          ...architecture,
+          environment: {
+            ...architecture.environment,
+            cloudProvider: cloudProviders[0].value,
+          },
+        });
       }
+    }
 
-      // Special handling for region
-      if (architecture.environment.region && regions.length > 0) {
-        // Check if the stored region exists in available regions
-        const regionExists = regions.some(
-          (region) => region.value === architecture.environment.region
-        );
+    // Special handling for region
+    if (
+      regions.length > 0 &&
+      architecture.environment &&
+      (!initializedRef.current ||
+        (architecture.environment.region &&
+          architecture.environment.region !== localSelectedRegion &&
+          regions.some((r) => r.value === architecture.environment.region)))
+    ) {
+      // Check if the stored region exists
+      const regionExists = regions.some(
+        (region) => region.value === architecture.environment.region
+      );
 
-        if (regionExists) {
-          if (selectedRegion !== architecture.environment.region) {
-            setSelectedRegion(architecture.environment.region);
-          }
-        } else if (regions.length > 0) {
-          // If stored region doesn't exist or is empty, update architecture with first available region
-          updateArchitecture({
-            ...architecture,
-            environment: {
-              ...architecture.environment,
-              region: regions[0].value,
-            },
-          });
-          setSelectedRegion(regions[0].value);
+      if (regionExists) {
+        // Set the dropdown to match architecture state
+        if (localSelectedRegion !== architecture.environment.region) {
+          console.log(`Setting region to ${architecture.environment.region}`);
+          updateRegion(architecture.environment.region);
         }
-      } else if (regions.length > 0 && !architecture.environment.region) {
-        // If no region is set but regions are available, set the first region
+      } else if (!initializedRef.current) {
+        // Use first available region - but only during initialization
+        console.log(`Setting region to first available: ${regions[0].value}`);
         updateArchitecture({
           ...architecture,
           environment: {
@@ -196,8 +349,18 @@ const InputForm = ({ architecture, updateArchitecture }) => {
             region: regions[0].value,
           },
         });
-        setSelectedRegion(regions[0].value);
       }
+    } else if (regions.length > 0 && !architecture.environment.region) {
+      // If no region is set but regions are available, set the first region
+      console.log(`No region set, defaulting to: ${regions[0].value}`);
+      updateArchitecture({
+        ...architecture,
+        environment: {
+          ...architecture.environment,
+          region: regions[0].value,
+        },
+      });
+      updateRegion(regions[0].value);
     }
   }, [
     architecture.environment,
@@ -206,12 +369,12 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     regions,
     updateArchitecture,
     selectedHardwareProfile,
-    selectedCloudProvider,
-    selectedRegion,
-    setSelectedHardwareProfile,
-    setSelectedCloudProvider,
-    setSelectedRegion,
-  ]);
+    localSelectedCloudProvider,
+    localSelectedRegion,
+    updateHardwareProfile,
+    updateCloudProvider,
+    updateRegion,
+  ]); // Include all necessary dependencies
 
   const handleComponentToggle = (componentName) => {
     if (componentName === "elasticsearch") {
@@ -710,6 +873,72 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     }));
   };
 
+  // Update all instance configuration IDs from the dynamic node sizes
+  const updateAllInstanceConfigIds = () => {
+    console.log("Updating instance configuration IDs from deployment template");
+    console.log(
+      `Current cloud provider: ${localSelectedCloudProvider}, region: ${localSelectedRegion}, hardware profile: ${selectedHardwareProfile}`
+    );
+
+    // Create a copy of the architecture state
+    const updatedArchitecture = { ...architecture };
+
+    // Update Elasticsearch tiers
+    if (updatedArchitecture.components.elasticsearch) {
+      const tiers = updatedArchitecture.components.elasticsearch.tiers;
+      if (tiers) {
+        Object.keys(tiers).forEach((tierName) => {
+          const tierConfig = dynamicNodeSizes[`elasticsearch.${tierName}`];
+          if (tierConfig?.configId) {
+            // Use the configId from the dynamic node sizes
+            tiers[tierName].instanceConfigId = tierConfig.configId;
+            console.log(
+              `Updated ${tierName} tier instanceConfigId to ${tierConfig.configId}`
+            );
+          } else {
+            console.log(`No configId found for ${tierName} tier`);
+          }
+        });
+      }
+    }
+
+    // Update other components (mlNodes, kibana, enterpriseSearch, integrationsServer)
+    const componentsToUpdate = [
+      "mlNodes",
+      "kibana",
+      "enterpriseSearch",
+      "integrationsServer",
+    ];
+    componentsToUpdate.forEach((componentName) => {
+      if (updatedArchitecture.components[componentName]) {
+        const componentConfig = dynamicNodeSizes[componentName];
+        if (componentConfig?.configId) {
+          // Use the configId from the dynamic node sizes
+          updatedArchitecture.components[componentName].instanceConfigId =
+            componentConfig.configId;
+          console.log(
+            `Updated ${componentName} instanceConfigId to ${componentConfig.configId}`
+          );
+        } else {
+          console.log(`No configId found for ${componentName}`);
+        }
+      }
+    });
+
+    // Update the architecture state
+    updateArchitecture(updatedArchitecture);
+  };
+
+  // Update instance configuration IDs when dynamic node sizes are loaded
+  useEffect(() => {
+    if (Object.keys(dynamicNodeSizes).length > 0) {
+      console.log(
+        "Dynamic node sizes changed, updating instance configuration IDs"
+      );
+      updateAllInstanceConfigIds();
+    }
+  }, [dynamicNodeSizes]); // architecture is intentionally omitted to prevent infinite loops
+
   return (
     <EuiPanel hasShadow={false} hasBorder>
       <EuiTitle size="s">
@@ -748,15 +977,43 @@ const InputForm = ({ architecture, updateArchitecture }) => {
                 options={hardwareProfiles}
                 value={selectedHardwareProfile}
                 onChange={(e) => {
-                  setSelectedHardwareProfile(e.target.value);
-                  // Update architecture state with selected hardware profile
-                  updateArchitecture({
+                  const newProfile = e.target.value;
+                  console.log(`Hardware profile changed to: ${newProfile}`);
+
+                  // First update the local state
+                  updateHardwareProfile(newProfile);
+
+                  // Then update the architecture state
+                  const updatedArchitecture = {
                     ...architecture,
                     environment: {
                       ...architecture.environment,
-                      hardwareProfile: e.target.value,
+                      hardwareProfile: newProfile,
                     },
-                  });
+                  };
+                  updateArchitecture(updatedArchitecture);
+
+                  // Store this selection in sessionStorage to make it persist
+                  try {
+                    sessionStorage.setItem(
+                      "selectedHardwareProfile",
+                      newProfile
+                    );
+                  } catch (error) {
+                    console.warn(
+                      "Failed to store hardware profile in sessionStorage:",
+                      error
+                    );
+                  }
+
+                  // Update instance configuration IDs after hardware profile changes
+                  // Use a longer delay to ensure the new template is fully loaded
+                  setTimeout(() => {
+                    console.log(
+                      `Updating instance config IDs for profile: ${newProfile}`
+                    );
+                    updateAllInstanceConfigIds();
+                  }, 1000);
                 }}
                 aria-label="Select Hardware Profile"
               />
@@ -769,17 +1026,45 @@ const InputForm = ({ architecture, updateArchitecture }) => {
             >
               <EuiSelect
                 options={cloudProviders}
-                value={selectedCloudProvider}
+                value={localSelectedCloudProvider}
                 onChange={(e) => {
-                  setSelectedCloudProvider(e.target.value);
-                  // Update architecture state with selected cloud provider
-                  updateArchitecture({
+                  const newProvider = e.target.value;
+                  console.log(`Cloud provider changed to: ${newProvider}`);
+
+                  // First update the local state
+                  updateCloudProvider(newProvider);
+
+                  // Then update the architecture state
+                  const updatedArchitecture = {
                     ...architecture,
                     environment: {
                       ...architecture.environment,
-                      cloudProvider: e.target.value,
+                      cloudProvider: newProvider,
                     },
-                  });
+                  };
+                  updateArchitecture(updatedArchitecture);
+
+                  // Store this selection in sessionStorage to make it persist
+                  try {
+                    sessionStorage.setItem(
+                      "selectedCloudProvider",
+                      newProvider
+                    );
+                  } catch (error) {
+                    console.warn(
+                      "Failed to store cloud provider in sessionStorage:",
+                      error
+                    );
+                  }
+
+                  // Update instance configuration IDs after cloud provider changes
+                  // Use a longer delay to ensure the new template is fully loaded
+                  setTimeout(() => {
+                    console.log(
+                      `Updating instance config IDs for cloud provider: ${newProvider}`
+                    );
+                    updateAllInstanceConfigIds();
+                  }, 1000);
                 }}
                 aria-label="Select Cloud Provider"
                 isDisabled={cloudProviders.length === 0}
@@ -793,17 +1078,42 @@ const InputForm = ({ architecture, updateArchitecture }) => {
             >
               <EuiSelect
                 options={regions}
-                value={selectedRegion}
+                value={localSelectedRegion}
                 onChange={(e) => {
-                  setSelectedRegion(e.target.value);
-                  // Update architecture state with selected region
-                  updateArchitecture({
+                  const newRegion = e.target.value;
+                  console.log(`Region changed to: ${newRegion}`);
+
+                  // First update the local state
+                  updateRegion(newRegion);
+
+                  // Then update the architecture state
+                  const updatedArchitecture = {
                     ...architecture,
                     environment: {
                       ...architecture.environment,
-                      region: e.target.value,
+                      region: newRegion,
                     },
-                  });
+                  };
+                  updateArchitecture(updatedArchitecture);
+
+                  // Store this selection in sessionStorage to make it persist
+                  try {
+                    sessionStorage.setItem("selectedRegion", newRegion);
+                  } catch (error) {
+                    console.warn(
+                      "Failed to store region in sessionStorage:",
+                      error
+                    );
+                  }
+
+                  // Update instance configuration IDs after region changes
+                  // Use a longer delay to ensure the new template is fully loaded
+                  setTimeout(() => {
+                    console.log(
+                      `Updating instance config IDs for region: ${newRegion}`
+                    );
+                    updateAllInstanceConfigIds();
+                  }, 1000);
                 }}
                 aria-label="Select Region"
                 isDisabled={regions.length === 0}

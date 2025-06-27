@@ -168,9 +168,10 @@ const ComponentNode = ({
         <div className="resource-instance-id-container">
           <span
             className="resource-instance-id"
-            title="Instance Configuration ID"
+            title="Instance Configuration ID from deployment template"
           >
-            {instanceConfigId}
+            {/* Clean the ID by removing any version numbers (like .1.1) at the end */}
+            {instanceConfigId.replace(/\.\d+\.\d+$/, "")}
           </span>
         </div>
       )}
@@ -286,30 +287,10 @@ const ArchitectureDiagram = ({
       component.storageMultiplier !== undefined &&
       component.cpuMultiplier !== undefined;
 
-    // Determine instance configuration ID based on node type, cloud provider, and region
-    let instanceConfigId = null;
-
-    // Get cloud provider and region from architecture state
-    const provider = architecture.environment.cloudProvider || "aws";
-    const region = architecture.environment.region || "us-east-1";
-
-    // Format instance configuration ID based on Elasticsearch's naming convention
-    if (isElasticsearchNode) {
-      if (tier) {
-        // For hot, warm, cold, frozen tiers
-        const tierKey = componentName.toLowerCase();
-        instanceConfigId = `${provider}.${region}.elasticsearch.${tierKey}`;
-      } else if (componentName === "mlNodes") {
-        // For ML nodes
-        instanceConfigId = `${provider}.${region}.elasticsearch.ml`;
-      }
-    } else if (componentName === "kibana") {
-      instanceConfigId = `${provider}.${region}.kibana`;
-    } else if (componentName === "enterpriseSearch") {
-      instanceConfigId = `${provider}.${region}.enterprise_search`;
-    } else if (componentName === "integrationsServer") {
-      instanceConfigId = `${provider}.${region}.integrations_server`;
-    }
+    // Use only the instance configuration ID from the component state
+    // This will be set by the updateAllInstanceConfigIds function when the environment changes
+    // or when dynamic node sizes are loaded
+    const instanceConfigId = component.instanceConfigId;
 
     return nodeSizes.map((nodeSize, index) => (
       <EuiFlexItem key={`${componentName}-${index}-az${azIndex}`}>
