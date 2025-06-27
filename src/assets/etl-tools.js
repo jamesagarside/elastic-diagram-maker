@@ -1,9 +1,9 @@
 // ETL and queuing tools data for the Data Collection dropdown
 import { useState } from "react";
 
-// Define static paths to ETL tool icons - using public URL
-// This avoids SVG namespace issues with direct imports
-const iconBasePath = process.env.PUBLIC_URL + "/img/etl-icons";
+// Use static path references to the icons in the public folder
+// Make sure we're using the correct absolute path with PUBLIC_URL
+const PUBLIC_URL = process.env.PUBLIC_URL || "";
 
 // Define common ETL and queuing tools
 export const etlTools = [
@@ -12,7 +12,7 @@ export const etlTools = [
     name: "Apache Kafka",
     description:
       "Distributed event streaming platform for high-performance data pipelines",
-    icon: `${iconBasePath}/kafka.svg`,
+    icon: `${PUBLIC_URL}/img/etl-icons/kafka.svg`,
     category: "messaging",
   },
   {
@@ -20,7 +20,7 @@ export const etlTools = [
     name: "AWS Glue",
     description:
       "Serverless data integration service that makes it easy to discover, prepare, and combine data",
-    icon: `${iconBasePath}/aws-glue.svg`,
+    icon: `${PUBLIC_URL}/img/etl-icons/aws-glue.svg`,
     category: "etl",
   },
   {
@@ -28,7 +28,7 @@ export const etlTools = [
     name: "Apache NiFi",
     description:
       "Data processing and distribution system for automating and managing data flows",
-    icon: `${iconBasePath}/nifi.svg`,
+    icon: `${PUBLIC_URL}/img/etl-icons/nifi.svg`,
     category: "etl",
   },
   {
@@ -36,21 +36,21 @@ export const etlTools = [
     name: "RabbitMQ",
     description:
       "Message broker that implements Advanced Message Queuing Protocol (AMQP)",
-    icon: `${iconBasePath}/rabbitmq.svg`,
+    icon: `${PUBLIC_URL}/img/etl-icons/rabbitmq.svg`,
     category: "messaging",
   },
   {
     id: "spark",
     name: "Apache Spark",
     description: "Unified analytics engine for large-scale data processing",
-    icon: `${iconBasePath}/spark.svg`,
+    icon: `${PUBLIC_URL}/img/etl-icons/spark.svg`,
     category: "processing",
   },
   {
     id: "aws-kinesis",
     name: "AWS Kinesis",
     description: "Process and analyze real-time, streaming data",
-    icon: `${iconBasePath}/aws-kinesis.svg`,
+    icon: `${PUBLIC_URL}/img/etl-icons/aws-kinesis.svg`,
     category: "streaming",
   },
   {
@@ -58,7 +58,7 @@ export const etlTools = [
     name: "Azure Data Factory",
     description:
       "Cloud-based data integration service for creating data-driven workflows",
-    icon: `${iconBasePath}/azure-data-factory.svg`,
+    icon: `${PUBLIC_URL}/img/etl-icons/azure-data-factory.svg`,
     category: "etl",
   },
 ];

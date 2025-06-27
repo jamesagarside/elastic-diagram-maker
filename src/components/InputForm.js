@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 // Import the dynamic integrations fetching hook
 import { useIntegrations } from "../assets/data-integrations.js";
-// Import the deployment templates hook
-import { useDeploymentTemplates } from "../assets/deployment-templates.js";
-// Import the instance configurations hook
+// Import our cached deployment templates hook
+import useCachedDeploymentTemplates from "../assets/use-cached-deployment-templates.js";
+// Import the instance configurations utilities
 import {
-  useRegionDeploymentTemplates,
   formatSize,
   calculateStorageSizeGB,
   calculateCPUCount,
@@ -80,7 +79,7 @@ const InputForm = ({ architecture, updateArchitecture }) => {
   // Get ETL tools using our custom hook
   const { tools: etlTools } = useEtlTools();
 
-  // Fetch deployment templates dynamically using our custom hook
+  // Fetch deployment templates dynamically using our cached deployment templates hook
   const {
     templates,
     loading: isLoadingTemplates,
@@ -88,322 +87,137 @@ const InputForm = ({ architecture, updateArchitecture }) => {
     hardwareProfiles,
     cloudProviders,
     regions,
-    selectedHardwareProfile: defaultSelectedHardwareProfile,
-    selectedCloudProvider,
-    selectedRegion,
-    setSelectedHardwareProfile,
-    setSelectedCloudProvider,
-    setSelectedRegion,
-  } = useDeploymentTemplates();
-
-  // Add state variables for selected hardware profile, cloud provider, and region
-  // Use the default values from useDeploymentTemplates as initial values
-  const [selectedHardwareProfile, setLocalSelectedHardwareProfile] = useState(
-    defaultSelectedHardwareProfile || ""
-  );
-  const [localSelectedCloudProvider, setLocalSelectedCloudProvider] = useState(
-    selectedCloudProvider || ""
-  );
-  const [localSelectedRegion, setLocalSelectedRegion] = useState(
-    selectedRegion || ""
-  );
-
-  // Create wrapper functions to update both our local state and the external state from the useDeploymentTemplates hook
-  const updateHardwareProfile = useCallback(
-    (profile) => {
-      setLocalSelectedHardwareProfile(profile);
-      setSelectedHardwareProfile(profile);
-    },
-    [setSelectedHardwareProfile]
-  );
-
-  const updateCloudProvider = useCallback(
-    (provider) => {
-      setLocalSelectedCloudProvider(provider);
-      setSelectedCloudProvider(provider);
-    },
-    [setSelectedCloudProvider]
-  );
-
-  const updateRegion = useCallback(
-    (region) => {
-      setLocalSelectedRegion(region);
-      setSelectedRegion(region);
-    },
-    [setSelectedRegion]
-  );
-
-  // Try to retrieve stored selections from sessionStorage
-  useEffect(() => {
-    try {
-      // Restore hardware profile
-      const storedProfile = sessionStorage.getItem("selectedHardwareProfile");
-      if (
-        storedProfile &&
-        hardwareProfiles.some((p) => p.value === storedProfile)
-      ) {
-        console.log(
-          `Restoring hardware profile from sessionStorage: ${storedProfile}`
-        );
-        updateHardwareProfile(storedProfile);
-
-        // Update architecture if needed
-        if (architecture.environment?.hardwareProfile !== storedProfile) {
-          updateArchitecture({
-            ...architecture,
-            environment: {
-              ...architecture.environment,
-              hardwareProfile: storedProfile,
-            },
-          });
-        }
-      } else if (defaultSelectedHardwareProfile) {
-        updateHardwareProfile(defaultSelectedHardwareProfile);
-      }
-
-      // Restore cloud provider
-      const storedCloudProvider = sessionStorage.getItem(
-        "selectedCloudProvider"
-      );
-      if (
-        storedCloudProvider &&
-        cloudProviders.some((p) => p.value === storedCloudProvider)
-      ) {
-        console.log(
-          `Restoring cloud provider from sessionStorage: ${storedCloudProvider}`
-        );
-        updateCloudProvider(storedCloudProvider);
-
-        // Update architecture if needed
-        if (architecture.environment?.cloudProvider !== storedCloudProvider) {
-          updateArchitecture({
-            ...architecture,
-            environment: {
-              ...architecture.environment,
-              cloudProvider: storedCloudProvider,
-            },
-          });
-        }
-      }
-
-      // Restore region
-      const storedRegion = sessionStorage.getItem("selectedRegion");
-      if (storedRegion && regions.some((r) => r.value === storedRegion)) {
-        console.log(`Restoring region from sessionStorage: ${storedRegion}`);
-        updateRegion(storedRegion);
-
-        // Update architecture if needed
-        if (architecture.environment?.region !== storedRegion) {
-          updateArchitecture({
-            ...architecture,
-            environment: {
-              ...architecture.environment,
-              region: storedRegion,
-            },
-          });
-        }
-      }
-    } catch (error) {
-      console.warn("Error retrieving selections from sessionStorage:", error);
-    }
-  }, [
-    hardwareProfiles,
-    cloudProviders,
-    regions,
-    defaultSelectedHardwareProfile,
-    updateArchitecture,
-    architecture,
-    updateHardwareProfile,
-    updateCloudProvider,
-    updateRegion,
-  ]);
-
-  // Fetch region-specific deployment templates and instance configurations
-  const {
     nodeSizes: dynamicNodeSizes,
     instanceConfigurations,
     loading: isLoadingInstanceConfig,
     error: instanceConfigError,
-  } = useRegionDeploymentTemplates(selectedRegion, selectedHardwareProfile);
+    selectedHardwareProfile,
+    selectedCloudProvider,
+    selectedRegion,
+    updateHardwareProfile,
+    updateCloudProvider,
+    updateRegion,
+  } = useCachedDeploymentTemplates();
+
+  // Add a ref to track component changes to avoid triggering unnecessary updates
+  const componentChangingRef = useRef(false);
+
+  // Session restoration is now handled by our cached deployment templates hook
+  // No need for a separate effect here
 
   // Initialize environment dropdown values from architecture state
   // Avoid resetting hardware profile when it's manually changed
   const initializedRef = useRef(false);
 
+  // Sync architecture state with environment settings
   useEffect(() => {
-    // Only proceed if there are hardware profiles and we haven't initialized yet
-    // or if the architecture state has a hardware profile that doesn't match our local state
+    // Skip if no profiles loaded yet or in the middle of a component toggle
     if (
-      hardwareProfiles.length > 0 &&
-      architecture.environment &&
-      (!initializedRef.current ||
-        (architecture.environment.hardwareProfile &&
-          architecture.environment.hardwareProfile !==
-            selectedHardwareProfile &&
-          hardwareProfiles.some(
-            (p) => p.value === architecture.environment.hardwareProfile
-          )))
+      hardwareProfiles.length === 0 ||
+      !architecture.environment ||
+      componentChangingRef.current
     ) {
-      // Check if the stored profile exists
-      const profileExists = hardwareProfiles.some(
-        (profile) => profile.value === architecture.environment.hardwareProfile
-      );
-
-      if (profileExists) {
-        // Set the dropdown to match architecture state
-        if (
-          selectedHardwareProfile !== architecture.environment.hardwareProfile
-        ) {
-          console.log(
-            `Setting hardware profile to ${architecture.environment.hardwareProfile}`
-          );
-          updateHardwareProfile(architecture.environment.hardwareProfile);
-        }
-      } else if (!initializedRef.current) {
-        // Use first available profile - but only during initialization
-        console.log(
-          `Setting hardware profile to first available: ${hardwareProfiles[0].value}`
-        );
-        updateArchitecture({
-          ...architecture,
-          environment: {
-            ...architecture.environment,
-            hardwareProfile: hardwareProfiles[0].value,
-          },
-        });
-      }
-
-      // Mark as initialized so we don't reset manually changed profiles
-      initializedRef.current = true;
+      return;
     }
 
-    // Special handling for cloud provider
-    if (
-      cloudProviders.length > 0 &&
-      architecture.environment &&
-      (!initializedRef.current ||
-        (architecture.environment.cloudProvider &&
-          architecture.environment.cloudProvider !==
-            localSelectedCloudProvider &&
-          cloudProviders.some(
-            (p) => p.value === architecture.environment.cloudProvider
-          )))
-    ) {
-      // Check if the stored provider exists
-      const providerExists = cloudProviders.some(
-        (provider) => provider.value === architecture.environment.cloudProvider
-      );
+    // Create a batched update to minimize renders
+    const needsUpdate =
+      !initializedRef.current ||
+      architecture.environment.hardwareProfile !== selectedHardwareProfile ||
+      architecture.environment.cloudProvider !== selectedCloudProvider ||
+      architecture.environment.region !== selectedRegion;
 
-      if (providerExists) {
-        // Set the dropdown to match architecture state
-        if (
-          localSelectedCloudProvider !== architecture.environment.cloudProvider
-        ) {
-          console.log(
-            `Setting cloud provider to ${architecture.environment.cloudProvider}`
-          );
-          updateCloudProvider(architecture.environment.cloudProvider);
-        }
-      } else if (!initializedRef.current) {
-        // Use first available provider - but only during initialization
-        console.log(
-          `Setting cloud provider to first available: ${cloudProviders[0].value}`
-        );
-        updateArchitecture({
-          ...architecture,
-          environment: {
-            ...architecture.environment,
-            cloudProvider: cloudProviders[0].value,
-          },
-        });
-      }
-    }
+    if (needsUpdate) {
+      console.log("Synchronizing environment state with architecture");
 
-    // Special handling for region
-    if (
-      regions.length > 0 &&
-      architecture.environment &&
-      (!initializedRef.current ||
-        (architecture.environment.region &&
-          architecture.environment.region !== localSelectedRegion &&
-          regions.some((r) => r.value === architecture.environment.region)))
-    ) {
-      // Check if the stored region exists
-      const regionExists = regions.some(
-        (region) => region.value === architecture.environment.region
-      );
-
-      if (regionExists) {
-        // Set the dropdown to match architecture state
-        if (localSelectedRegion !== architecture.environment.region) {
-          console.log(`Setting region to ${architecture.environment.region}`);
-          updateRegion(architecture.environment.region);
-        }
-      } else if (!initializedRef.current) {
-        // Use first available region - but only during initialization
-        console.log(`Setting region to first available: ${regions[0].value}`);
-        updateArchitecture({
-          ...architecture,
-          environment: {
-            ...architecture.environment,
-            region: regions[0].value,
-          },
-        });
-      }
-    } else if (regions.length > 0 && !architecture.environment.region) {
-      // If no region is set but regions are available, set the first region
-      console.log(`No region set, defaulting to: ${regions[0].value}`);
-      updateArchitecture({
+      // Create a single update with all environment changes
+      const updatedArchitecture = {
         ...architecture,
         environment: {
           ...architecture.environment,
-          region: regions[0].value,
+          hardwareProfile: selectedHardwareProfile,
+          cloudProvider: selectedCloudProvider,
+          region: selectedRegion,
         },
-      });
-      updateRegion(regions[0].value);
+      };
+
+      // Only update if something changed
+      if (
+        !initializedRef.current ||
+        architecture.environment.hardwareProfile !==
+          updatedArchitecture.environment.hardwareProfile ||
+        architecture.environment.cloudProvider !==
+          updatedArchitecture.environment.cloudProvider ||
+        architecture.environment.region !==
+          updatedArchitecture.environment.region
+      ) {
+        console.log(
+          "Environment settings changed, updating architecture state"
+        );
+        updateArchitecture(updatedArchitecture);
+      }
+
+      // Mark as initialized
+      initializedRef.current = true;
     }
   }, [
-    architecture.environment,
+    architecture,
     hardwareProfiles,
-    cloudProviders,
-    regions,
-    updateArchitecture,
     selectedHardwareProfile,
-    localSelectedCloudProvider,
-    localSelectedRegion,
-    updateHardwareProfile,
-    updateCloudProvider,
-    updateRegion,
-  ]); // Include all necessary dependencies
+    selectedCloudProvider,
+    selectedRegion,
+    updateArchitecture,
+  ]);
 
   const handleComponentToggle = (componentName) => {
+    // Set flag to indicate we're toggling a component
+    componentChangingRef.current = true;
+    console.log(
+      `Toggling component ${componentName}, setting componentChangingRef to true`
+    );
+
+    // Create updated state with the component toggled
+    const updatedArchitecture = { ...architecture };
+
     if (componentName === "elasticsearch") {
-      updateArchitecture({
-        ...architecture,
-        components: {
-          ...architecture.components,
-          elasticsearch: {
-            ...architecture.components.elasticsearch,
-            enabled: !architecture.components.elasticsearch.enabled,
-          },
+      updatedArchitecture.components = {
+        ...updatedArchitecture.components,
+        elasticsearch: {
+          ...updatedArchitecture.components.elasticsearch,
+          enabled: !updatedArchitecture.components.elasticsearch.enabled,
         },
-      });
+      };
     } else {
-      updateArchitecture({
-        ...architecture,
-        components: {
-          ...architecture.components,
-          [componentName]: {
-            ...architecture.components[componentName],
-            enabled: !architecture.components[componentName].enabled,
-          },
+      updatedArchitecture.components = {
+        ...updatedArchitecture.components,
+        [componentName]: {
+          ...updatedArchitecture.components[componentName],
+          enabled: !updatedArchitecture.components[componentName].enabled,
         },
-      });
+      };
     }
+
+    // Update the architecture
+    updateArchitecture(updatedArchitecture);
+
+    // Reset the flag after a longer delay to ensure all updates have completed
+    setTimeout(() => {
+      console.log(
+        `Component toggle complete for ${componentName}, resetting componentChangingRef to false`
+      );
+      componentChangingRef.current = false;
+    }, 500);
   };
 
   const handleTierToggle = (tier) => {
-    updateArchitecture({
+    // Set flag to indicate we're toggling a component
+    componentChangingRef.current = true;
+    console.log(
+      `Toggling Elasticsearch tier ${tier}, setting componentChangingRef to true`
+    );
+
+    // Create updated state with the tier toggled
+    const updatedArchitecture = {
       ...architecture,
       components: {
         ...architecture.components,
@@ -419,7 +233,18 @@ const InputForm = ({ architecture, updateArchitecture }) => {
           },
         },
       },
-    });
+    };
+
+    // Update the architecture
+    updateArchitecture(updatedArchitecture);
+
+    // Reset the flag after a longer delay to ensure all updates have completed
+    setTimeout(() => {
+      console.log(
+        `Tier toggle complete for ${tier}, resetting componentChangingRef to false`
+      );
+      componentChangingRef.current = false;
+    }, 500);
   };
 
   // State to track which agent sections are collapsed
@@ -718,14 +543,28 @@ const InputForm = ({ architecture, updateArchitecture }) => {
       dynamicSizes &&
       dynamicSizes.sizes &&
       !dynamicSizes.sizes.includes(component.nodeSize * 1024) && // Convert GB to MB for comparison
-      dynamicSizes.defaultSize
+      dynamicSizes.defaultSize &&
+      !componentChangingRef.current // Only update if not in the middle of a component toggle
     ) {
+      // Set the changing ref to prevent loops
+      componentChangingRef.current = true;
+      console.log(
+        `Updating node size for ${componentName} to default size ${
+          dynamicSizes.defaultSize / 1024
+        }GB`
+      );
+
       // Schedule an update to use the default size
       setTimeout(() => {
         handleComponentNodeSizeChange(
           componentName,
           dynamicSizes.defaultSize / 1024
         ); // Convert MB to GB
+
+        // Reset the changing ref after update
+        setTimeout(() => {
+          componentChangingRef.current = false;
+        }, 500);
       }, 0);
     }
 
@@ -802,11 +641,25 @@ const InputForm = ({ architecture, updateArchitecture }) => {
       dynamicSizes &&
       dynamicSizes.sizes &&
       !dynamicSizes.sizes.includes(tier.nodeSize * 1024) && // Convert GB to MB for comparison
-      dynamicSizes.defaultSize
+      dynamicSizes.defaultSize &&
+      !componentChangingRef.current // Only update if not in the middle of a component toggle
     ) {
+      // Set the changing ref to prevent loops
+      componentChangingRef.current = true;
+      console.log(
+        `Updating node size for ${tierName} tier to default size ${
+          dynamicSizes.defaultSize / 1024
+        }GB`
+      );
+
       // Schedule an update to use the default size
       setTimeout(() => {
         handleTierNodeSizeChange(tierName, dynamicSizes.defaultSize / 1024); // Convert MB to GB
+
+        // Reset the changing ref after update
+        setTimeout(() => {
+          componentChangingRef.current = false;
+        }, 500);
       }, 0);
     }
 
@@ -875,10 +728,41 @@ const InputForm = ({ architecture, updateArchitecture }) => {
 
   // Update all instance configuration IDs from the dynamic node sizes
   const updateAllInstanceConfigIds = () => {
+    // Check if we have any dynamic node sizes to work with
+    if (Object.keys(dynamicNodeSizes).length === 0) {
+      console.log(
+        "No dynamic node sizes available yet, skipping instance config ID update"
+      );
+      return;
+    }
+
+    // Skip if we're in the middle of a component toggle to prevent loops
+    if (componentChangingRef.current) {
+      console.log("Skipping instance config ID update during component change");
+      return;
+    }
+
+    // Verify we have the correct environment settings
     console.log("Updating instance configuration IDs from deployment template");
     console.log(
-      `Current cloud provider: ${localSelectedCloudProvider}, region: ${localSelectedRegion}, hardware profile: ${selectedHardwareProfile}`
+      `Current cloud provider: ${selectedCloudProvider}, region: ${selectedRegion}, hardware profile: ${selectedHardwareProfile}`
     );
+
+    // Verify environment in architecture matches our hook state
+    if (architecture.environment?.cloudProvider !== selectedCloudProvider) {
+      console.warn(
+        `Warning: Architecture cloud provider (${architecture.environment?.cloudProvider}) doesn't match hook state (${selectedCloudProvider})`
+      );
+    }
+
+    if (architecture.environment?.region !== selectedRegion) {
+      console.warn(
+        `Warning: Architecture region (${architecture.environment?.region}) doesn't match hook state (${selectedRegion})`
+      );
+    }
+
+    // Track if any changes are actually made
+    let hasChanges = false;
 
     // Create a copy of the architecture state
     const updatedArchitecture = { ...architecture };
@@ -890,11 +774,14 @@ const InputForm = ({ architecture, updateArchitecture }) => {
         Object.keys(tiers).forEach((tierName) => {
           const tierConfig = dynamicNodeSizes[`elasticsearch.${tierName}`];
           if (tierConfig?.configId) {
-            // Use the configId from the dynamic node sizes
-            tiers[tierName].instanceConfigId = tierConfig.configId;
-            console.log(
-              `Updated ${tierName} tier instanceConfigId to ${tierConfig.configId}`
-            );
+            // Only update if the ID has actually changed
+            if (tiers[tierName].instanceConfigId !== tierConfig.configId) {
+              tiers[tierName].instanceConfigId = tierConfig.configId;
+              console.log(
+                `Updated ${tierName} tier instanceConfigId to ${tierConfig.configId}`
+              );
+              hasChanges = true;
+            }
           } else {
             console.log(`No configId found for ${tierName} tier`);
           }
@@ -913,31 +800,104 @@ const InputForm = ({ architecture, updateArchitecture }) => {
       if (updatedArchitecture.components[componentName]) {
         const componentConfig = dynamicNodeSizes[componentName];
         if (componentConfig?.configId) {
-          // Use the configId from the dynamic node sizes
-          updatedArchitecture.components[componentName].instanceConfigId =
-            componentConfig.configId;
-          console.log(
-            `Updated ${componentName} instanceConfigId to ${componentConfig.configId}`
-          );
+          // Only update if the ID has actually changed
+          if (
+            updatedArchitecture.components[componentName].instanceConfigId !==
+            componentConfig.configId
+          ) {
+            updatedArchitecture.components[componentName].instanceConfigId =
+              componentConfig.configId;
+            console.log(
+              `Updated ${componentName} instanceConfigId to ${componentConfig.configId}`
+            );
+            hasChanges = true;
+          }
         } else {
           console.log(`No configId found for ${componentName}`);
         }
       }
     });
 
-    // Update the architecture state
-    updateArchitecture(updatedArchitecture);
+    // Only update architecture if something actually changed
+    if (hasChanges) {
+      console.log(
+        "Detected changes to instance config IDs, updating architecture"
+      );
+      updateArchitecture(updatedArchitecture);
+    } else {
+      console.log("No changes to instance config IDs needed");
+    }
   };
+
+  // Add a debounce ref to prevent rapid consecutive updates
+  const pendingUpdateRef = useRef(null);
+  const lastUpdateTimeRef = useRef(0);
 
   // Update instance configuration IDs when dynamic node sizes are loaded
   useEffect(() => {
-    if (Object.keys(dynamicNodeSizes).length > 0) {
-      console.log(
-        "Dynamic node sizes changed, updating instance configuration IDs"
-      );
-      updateAllInstanceConfigIds();
+    // Skip if we're during a component toggle or don't have node sizes
+    if (Object.keys(dynamicNodeSizes).length === 0) {
+      return;
     }
-  }, [dynamicNodeSizes]); // architecture is intentionally omitted to prevent infinite loops
+
+    // Skip if we're in the middle of a component toggle
+    if (componentChangingRef.current) {
+      console.log(
+        "Dynamic node sizes changed, but skipping update during component change"
+      );
+      return;
+    }
+
+    // Check if we've updated recently to prevent rapid consecutive updates
+    const now = Date.now();
+    if (now - lastUpdateTimeRef.current < 1000) {
+      // At least 1 second between updates
+      console.log(
+        "Throttling instance config ID updates, too many updates in a short time"
+      );
+
+      // Clear any pending update
+      if (pendingUpdateRef.current) {
+        clearTimeout(pendingUpdateRef.current);
+      }
+
+      // Schedule a new update
+      pendingUpdateRef.current = setTimeout(() => {
+        if (!componentChangingRef.current) {
+          console.log("Running throttled instance config ID update");
+          lastUpdateTimeRef.current = Date.now();
+          updateAllInstanceConfigIds();
+        }
+      }, 1000);
+
+      return;
+    }
+
+    // Standard update path
+    console.log(
+      "Dynamic node sizes changed, updating instance configuration IDs"
+    );
+    lastUpdateTimeRef.current = now;
+
+    // Keep track of the timeout ID
+    pendingUpdateRef.current = setTimeout(() => {
+      // Double-check we're not in a component change before proceeding
+      if (!componentChangingRef.current) {
+        updateAllInstanceConfigIds();
+      } else {
+        console.log(
+          "Skipping instance config update due to active component change"
+        );
+      }
+    }, 500); // Longer timeout to ensure other state changes complete first
+
+    // Clean up the timeout if the component unmounts or the effect runs again
+    return () => {
+      if (pendingUpdateRef.current) {
+        clearTimeout(pendingUpdateRef.current);
+      }
+    };
+  }, [dynamicNodeSizes]); // architecture and updateAllInstanceConfigIds are intentionally omitted to prevent infinite loops
 
   return (
     <EuiPanel hasShadow={false} hasBorder>
@@ -980,6 +940,9 @@ const InputForm = ({ architecture, updateArchitecture }) => {
                   const newProfile = e.target.value;
                   console.log(`Hardware profile changed to: ${newProfile}`);
 
+                  // Block other environment changes during this update
+                  componentChangingRef.current = true;
+
                   // First update the local state
                   updateHardwareProfile(newProfile);
 
@@ -1006,14 +969,16 @@ const InputForm = ({ architecture, updateArchitecture }) => {
                     );
                   }
 
-                  // Update instance configuration IDs after hardware profile changes
-                  // Use a longer delay to ensure the new template is fully loaded
+                  // Clear the change flag after a short delay
                   setTimeout(() => {
+                    componentChangingRef.current = false;
+
+                    // Update instance configuration IDs after hardware profile changes
                     console.log(
                       `Updating instance config IDs for profile: ${newProfile}`
                     );
                     updateAllInstanceConfigIds();
-                  }, 1000);
+                  }, 150);
                 }}
                 aria-label="Select Hardware Profile"
               />
@@ -1026,13 +991,20 @@ const InputForm = ({ architecture, updateArchitecture }) => {
             >
               <EuiSelect
                 options={cloudProviders}
-                value={localSelectedCloudProvider}
+                value={selectedCloudProvider}
                 onChange={(e) => {
                   const newProvider = e.target.value;
                   console.log(`Cloud provider changed to: ${newProvider}`);
 
-                  // First update the local state
+                  // Block other environment changes during this update
+                  componentChangingRef.current = true;
+
+                  // First update the local state via our custom hook - this should trigger template refresh
                   updateCloudProvider(newProvider);
+
+                  console.log(
+                    `Cloud provider updated, regions should refresh automatically`
+                  );
 
                   // Then update the architecture state
                   const updatedArchitecture = {
@@ -1044,27 +1016,19 @@ const InputForm = ({ architecture, updateArchitecture }) => {
                   };
                   updateArchitecture(updatedArchitecture);
 
-                  // Store this selection in sessionStorage to make it persist
-                  try {
-                    sessionStorage.setItem(
-                      "selectedCloudProvider",
-                      newProvider
-                    );
-                  } catch (error) {
-                    console.warn(
-                      "Failed to store cloud provider in sessionStorage:",
-                      error
-                    );
-                  }
-
-                  // Update instance configuration IDs after cloud provider changes
-                  // Use a longer delay to ensure the new template is fully loaded
+                  // Use a longer delay for the component changing flag to allow templates to update
                   setTimeout(() => {
+                    console.log(
+                      `Setting componentChangingRef to false after cloud provider change`
+                    );
+                    componentChangingRef.current = false;
+
+                    // Update instance configuration IDs after cloud provider changes
                     console.log(
                       `Updating instance config IDs for cloud provider: ${newProvider}`
                     );
                     updateAllInstanceConfigIds();
-                  }, 1000);
+                  }, 500); // Increased timeout to allow for template fetch
                 }}
                 aria-label="Select Cloud Provider"
                 isDisabled={cloudProviders.length === 0}
@@ -1078,10 +1042,13 @@ const InputForm = ({ architecture, updateArchitecture }) => {
             >
               <EuiSelect
                 options={regions}
-                value={localSelectedRegion}
+                value={selectedRegion}
                 onChange={(e) => {
                   const newRegion = e.target.value;
                   console.log(`Region changed to: ${newRegion}`);
+
+                  // Block other environment changes during this update
+                  componentChangingRef.current = true;
 
                   // First update the local state
                   updateRegion(newRegion);
@@ -1106,14 +1073,16 @@ const InputForm = ({ architecture, updateArchitecture }) => {
                     );
                   }
 
-                  // Update instance configuration IDs after region changes
-                  // Use a longer delay to ensure the new template is fully loaded
+                  // Clear the change flag after a short delay
                   setTimeout(() => {
+                    componentChangingRef.current = false;
+
+                    // Update instance configuration IDs after region changes
                     console.log(
                       `Updating instance config IDs for region: ${newRegion}`
                     );
                     updateAllInstanceConfigIds();
-                  }, 1000);
+                  }, 150);
                 }}
                 aria-label="Select Region"
                 isDisabled={regions.length === 0}
@@ -2455,10 +2424,8 @@ const InputForm = ({ architecture, updateArchitecture }) => {
 // Export the InputForm component along with instance configurations
 const InputFormWithConfigs = (props) => {
   const { architecture, updateArchitecture } = props;
-  const { instanceConfigurations } = useRegionDeploymentTemplates(
-    architecture.environment?.region,
-    architecture.environment?.hardwareProfile
-  );
+  // Use our cached deployment templates to get instance configurations
+  const { instanceConfigurations } = useCachedDeploymentTemplates();
 
   // Add instance configurations to the component props
   return (

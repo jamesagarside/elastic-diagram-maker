@@ -9,6 +9,7 @@ import { icon as arrowRight } from "@elastic/eui/es/components/icon/assets/arrow
 import { icon as plusInCircle } from "@elastic/eui/es/components/icon/assets/plus_in_circle";
 import { icon as download } from "@elastic/eui/es/components/icon/assets/download";
 import { icon as importAction } from "@elastic/eui/es/components/icon/assets/import";
+import { icon as returnKey } from "@elastic/eui/es/components/icon/assets/return_key";
 
 // Register the icons with EUI
 appendIconComponentCache({
@@ -17,4 +18,5 @@ appendIconComponentCache({
   plusInCircle,
   download,
   import: importAction,
+  return_key: returnKey,
 });
