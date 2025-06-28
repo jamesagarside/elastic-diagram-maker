@@ -4,6 +4,16 @@ FROM node:18-alpine AS build
 # Set the working directory in the container
 WORKDIR /app
 
+# Accept build arguments for version information
+ARG VERSION=dev
+ARG COMMIT_SHA=unknown
+ARG BUILD_DATE=unknown
+
+# Set environment variables that will be baked into the React build
+ENV REACT_APP_VERSION=$VERSION
+ENV REACT_APP_COMMIT_SHA=$COMMIT_SHA
+ENV REACT_APP_BUILD_DATE=$BUILD_DATE
+
 # Copy package.json and package-lock.json (if available)
 COPY package*.json ./
 
@@ -18,6 +28,16 @@ RUN npm run build
 
 # Use a smaller Node.js image for the production environment
 FROM node:18-alpine AS production
+
+# Accept the same build arguments in this stage
+ARG VERSION=dev
+ARG COMMIT_SHA=unknown
+ARG BUILD_DATE=unknown
+
+# Pass version information to runtime environment
+ENV VERSION=${VERSION}
+ENV COMMIT_SHA=${COMMIT_SHA}
+ENV BUILD_DATE=${BUILD_DATE}
 
 # Set the working directory
 WORKDIR /app

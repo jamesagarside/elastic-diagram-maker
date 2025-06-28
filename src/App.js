@@ -21,6 +21,7 @@ import {
 } from "@elastic/eui";
 import InputForm from "./components/InputForm";
 import ArchitectureDiagram from "./components/ArchitectureDiagram";
+import VersionFooter from "./components/VersionFooter";
 
 // Import Elastic icon for the header
 // Import the Elastic logo image
@@ -306,6 +307,8 @@ function App() {
               </EuiFlexItem>
             </EuiFlexGroup>
           </EuiPanel>
+
+          <VersionFooter />
         </EuiPageBody>
       </EuiPage>
     </EuiProvider>

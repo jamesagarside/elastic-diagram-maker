@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const WebSocket = require("ws");
+const { exec } = require("child_process");
 
 const PORT = process.env.PORT || 3000;
 const MIME_TYPES = {
@@ -29,14 +30,68 @@ const PUBLIC_DIR = path.join(__dirname, "build");
 const server = http.createServer((req, res) => {
   console.log(`Request: ${req.url}`);
 
-  // Handle API proxy for Elastic deployment templates
-  if (req.url === "/api/deployment-templates") {
-    console.log("Proxying request to Elastic deployment templates API");
-
-    // Set CORS headers for all responses
+  // Set CORS headers for all API responses
+  if (req.url.startsWith("/api/")) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    // Handle OPTIONS pre-flight requests for all API endpoints
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+  }
+
+  // Handle API endpoint for version information
+  if (req.url === "/api/version") {
+    console.log("Request for version information");
+
+    // Get the version information from the environment
+    // These values are set during the build in Google Cloud Run
+    const version = process.env.VERSION || "dev";
+    const commitSha = process.env.COMMIT_SHA || "";
+    const buildDate =
+      process.env.BUILD_DATE || new Date().toISOString().split("T")[0];
+
+    // If we have a commit SHA from the environment, use that
+    if (commitSha) {
+      const versionInfo = {
+        version,
+        commit: commitSha,
+        buildDate,
+      };
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(versionInfo));
+      return;
+    }
+
+    // Otherwise try to get Git information directly
+    exec("git describe --tags --always", (err, stdout) => {
+      const gitVersion = err ? version : stdout.trim();
+
+      exec("git rev-parse HEAD", (err, stdout) => {
+        const gitCommit = err ? "" : stdout.trim();
+
+        const versionInfo = {
+          version: gitVersion,
+          commit: gitCommit,
+          buildDate,
+        };
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(versionInfo));
+      });
+    });
+
+    return;
+  }
+
+  // Handle API proxy for Elastic deployment templates
+  if (req.url === "/api/deployment-templates") {
+    console.log("Proxying request to Elastic deployment templates API");
 
     // Handle OPTIONS pre-flight requests
     if (req.method === "OPTIONS") {
